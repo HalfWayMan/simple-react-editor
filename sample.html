@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Editor Test</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <script type="text/javascript" src="https://agent.sulusoftware.co.uk/static/lib/react/react-with-addons-0.14.2.js"></script>
+    <script type="text/javascript" src="https://agent.sulusoftware.co.uk/static/lib/react/react-dom-0.14.2.js"></script>
+    <link rel="stylesheet/less" type="text/css" href="Editor.less" />
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/less.js/2.7.3/less.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <div class="row" style="margin-top: 20px;">
+        <div class="col-md-12">
+          <div id="container" style="height: 400px;"></div>
+        </div>
+      </div>
+    </div>
+    <script id="editor_script" type="text/jsx" src="Editor.jsx"></script>
+    <script type="text/jsx">
+      /** @jsx React.DOM */
+      (function () {
+        var config  = { };
+        var xhr     = new XMLHttpRequest ();
+
+        xhr.open ("GET", document.getElementById ("editor_script").src);
+        xhr.onload = function () {
+          var store   = new EditorStore (config, xhr.responseText);
+          var factory = React.createFactory (Editor);
+          ReactDOM.render (factory ({ store: store }, null), document.getElementById ("container"));
+        };
+
+        xhr.send (null);
+      }) ();
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.0-alpha1/JSXTransformer.js"></script>
+  </body>
+</html>
