@@ -12,7 +12,7 @@
     <div class="container">
       <div class="row" style="margin-top: 20px;">
         <div class="col-md-12">
-          <div id="container" style="height: 400px;"></div>
+          <div id="container" style="height: 600px;"></div>
         </div>
       </div>
     </div>
@@ -20,13 +20,14 @@
     <script type="text/jsx">
       /** @jsx React.DOM */
       (function () {
-        var config  = { };
+        var config  = { mountFocused: true };
         var xhr     = new XMLHttpRequest ();
 
         xhr.open ("GET", document.getElementById ("editor_script").src);
         xhr.onload = function () {
           var store   = new EditorStore (config, xhr.responseText);
           var factory = React.createFactory (Editor);
+          window.store = store;
           ReactDOM.render (factory ({ store: store }, null), document.getElementById ("container"));
         };
 

@@ -33,7 +33,7 @@ EditorEvent.prototype.unbindFrom = function (binding, cb) {
 
 EditorEvent.prototype.fire = function () {
   var args = Array.prototype.slice.call (arguments, [0]);
-  console.debug ("firing event:", this.name);
+  //console.debug ("firing event:", this.name);
   this.handlers.slice (0).forEach (function (handler) {
     try {
       handler.callback.apply (handler.binding, args);
@@ -41,139 +41,6 @@ EditorEvent.prototype.fire = function () {
       console.error ("Error in event handler (" + this.name + "):", err);
     }
   });
-};
-
-/* --------------------------------------------------------------------------------------------------------------------------- */
-
-var EditorTimer = function (name, callback, length, interval, hasZeroTick) {
-  if (interval === null || typeof interval === "undefined") {
-    if (length === null || typeof length === "undefined") {
-      throw new Error ("Cannot create EditorTimer without either interval or length");
-    }
-
-    interval = length;
-  }
-
-  this.name     = name;
-  this.callback = callback;
-  this.length   = length;
-  this.interval = interval;
-  this.rounds   = 0;
-  this.total    = (length === null || typeof length === "undefined") ? null : (length / interval);
-  this.started  = null;
-  this.ended    = null;
-  this.handle   = null;
-  this.state    = EditorTimer.State.STOPPED;
-  this.zeroTick = hasZeroTick || false;
-
-  this.Started  = new EditorEvent ("Timer[" + name + "].Started");
-  this.Stopped  = new EditorEvent ("Timer[" + name + "].Stopped");
-  this.Interval = new EditorEvent ("Timer[" + name + "].Interval");
-
-  this.start ();
-};
-
-EditorTimer.State = {
-  STOPPED: 0,
-  RUNNING: 1
-};
-
-EditorTimer.prototype.duration = function () {
-  if (this.state == EditorTimer.State.RUNNING) {
-    var now = new Date ();
-    return now.getTime () - this.started.getTime ();
-  } else {
-    return this.ended.getTime () - this.started.getTime ();
-  }
-};
-
-EditorTimer.prototype.durationSeconds = function () {
-  return Math.round (this.duration () / 1000);
-};
-
-EditorTimer.prototype.start = function () {
-  if (this.state === EditorTimer.State.STOPPED) {
-    console.debug ("Starting timer", this.name, "; interval:", this.interval, "ms, length:", this.length, "ms, total: ", this.total, "rounds");
-
-    this.rounds  = 0;
-    this.started = new Date ();
-    this.ended   = null;
-
-    this.state = EditorTimer.State.RUNNING;
-    this.onStarted ();
-
-    if (this.zeroTick) {
-      /* We want to call the callback at round zero (not after interval, which would be round 1) */
-      this.onTick ();
-    } else {
-      /* Otherwise call at round 1 */
-      this.rounds = 1;
-      this.handle = window.setTimeout (function () {
-        this.onTick ();
-      }.bind (this), this.interval);
-    }
-  } else {
-    console.warn ("Attempting to start timer '" + this.name + "'; timer is already running");
-  }
-};
-
-EditorTimer.prototype.stop = function () {
-  console.debug ("Stopping timer", this.name);
-
-  if (this.handle !== null) {
-    window.clearTimeout (this.handle);
-    this.handle = null;
-  }
-
-  if (this.state === EditorTimer.State.RUNNING) {
-    this.state = EditorTimer.State.STOPPED;
-    this.onStopped ();
-  }
-};
-
-EditorTimer.prototype.onTick = function () {
-  //console.debug ("Timer", this.time, "interval elapsed; round", this.rounds, "(elapsed:", this.duration ().toFixed (3), "ms)");
-  this.Interval.fire (this);
-
-  if (this.callback) {
-    var result;
-    try {
-      result = this.callback (this);
-    } catch (e) {
-      console.error ("Exception in timer callback (" + this.name + "):", e);
-    }
-
-    this._handleCallbackResult (result);
-  } else {
-    this._handleCallbackResult (true);
-  }
-};
-
-EditorTimer.prototype._handleCallbackResult = function (result) {
-  if (result === false) {
-    console.debug ("Timer", this.name, "stopped by callback return value");
-    this.stop ();
-  } else if (result instanceof Promise) {
-    console.debug ("Response to callback in timer", this.name, "is a promise; awaiting result");
-    result.then (function (res) {
-      this._handleCallbackResult (res);
-    }.bind (this));
-  } else {
-    this.rounds++;
-    if ((this.total === null || this.rounds < this.total) && this.state === EditorTimer.State.RUNNING) {
-      this.handle = window.setTimeout (function () {
-        this.onTick ();
-      }.bind (this), this.interval);
-    }
-  }
-};
-
-EditorTimer.prototype.onStarted = function () {
-  this.Started.fire (this);
-};
-
-EditorTimer.prototype.onStopped = function () {
-  this.Stopped.fire (this);
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
@@ -208,53 +75,63 @@ EditorTools.joinClasses = function () {
   return result.join (' ');
 };
 
-EditorTools.isNodeInRoot = function (node, root) {
-  while (node) {
-    if (node === root) {
-      return true;
-    }
-
-    node = node.parentNode;
-  }
-
-  return false;
-};
-
-EditorTools.listen = function (target, eventType, callback) {
-  if (target.addEventListener) {
-    target.addEventListener (eventType, callback, false);
-    return function () {
-      target.removeEventListener (eventType, callback, false);
-    };
-  } else if (target.attachEvent) {
-    target.attachEvent ("on" + eventType, callback);
-    return function () {
-      target.removeEvent ("on" + eventType, callback);
-    }
-  }
-};
-
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
 var EditorLineMarker = function () {
 };
 
 var EditorLine = function (store, index, content) {
-  this.store   = store;
-  this.index   = index;
-  this.content = content;
-  this.marker  = null;
+  this.store     = store;
+  this.index     = index;
+  this.content   = content;
+  this.marker    = null;
+  this.selection = {};
+  this.render    = [];
 
-  this.ContentChanged = new EditorEvent ("EditorLine.ContentChanged");
-  this.MarkerChanged  = new EditorEvent ("EditorLine.MarkerChanged");
-  this.Clicked        = new EditorEvent ("EditorLine.Clicked");
+  if (index === 4) {
+    this.selection[0] = { start: 4, end: 8 };
+  } else if (index === 5) {
+    this.selection[0] = { start: 2, end: 10 };
+  }
+
+  this.ContentChanged   = new EditorEvent ("EditorLine.ContentChanged");
+  this.SelectionChanged = new EditorEvent ("EditorLine.SelectionChanged");
+  this.MarkerChanged    = new EditorEvent ("EditorLine.MarkerChanged");
+  this.Clicked          = new EditorEvent ("EditorLine.Clicked");
+
+  this.computeRender ();
 };
 
 EditorLine.prototype.setContent = function (content) {
   if (content !== this.content) {
     this.content = content;
+    this.computeRender ();
     this.onContentChanged ();
   }
+};
+
+EditorLine.prototype.insertText = function (index, text) {
+  if (index === this.content.length) {
+    this.setContent (this.content + text);
+  } else {
+    this.setContent (this.content.slice (0, index) + text + this.content.slice (index));
+  }
+};
+
+EditorLine.prototype.deleteText = function (index, count) {
+  this.setContent (this.content.slice (0, index) + this.content.slice (index + count));
+};
+
+EditorLine.prototype.cancelSelection = function (cursor) {
+  if (cursor.id in this.selection) {
+    delete this.selection[cursor.id];
+    this.onSelectionChanged ();
+  }
+};
+
+EditorLine.prototype.updateSelection = function (cursor, selection) {
+  this.selection[cursor.id] = selection;
+  this.onSelectionChanged ();
 };
 
 EditorLine.prototype.getLength = function () {
@@ -274,11 +151,92 @@ EditorLine.prototype.clearMarker = function () {
 };
 
 EditorLine.prototype.setActive = function () {
-  this.store.cursor.setLine (this.index);
+  this.store.cursors.removeSecondary ();
+  this.store.cursors.primary.setLine (this.index);
+};
+
+EditorLine.prototype.computeRender = function () {
+  var length     = this.content.length;
+  var tab_size   = this.store.config.tabSize;
+  var syntax     = this.store.syntax;
+  var elements   = [];
+  var current    = { type: null, start: 0, end: -1, chars: "" };
+  var last_index = 0;
+
+  function submit_current () {
+    current.end = last_index;
+    elements.push (current);
+    current = { type: null, start: last_index, end: -1, chars: "" };
+  }
+
+  function append_to_current (type, what) {
+    var chars;
+
+    if (typeof what === "number") {
+      chars = String.fromCodePoint (what);
+    } else if (typeof what === "string") {
+      chars = what;
+    } else {
+      throw new Error ("Expected either number (codepoint) or string; found " + typeof what);
+    }
+
+    if (current.type === null) {
+      current.type = type;
+      current.chars += chars;
+    } else if (current.type !== type) {
+      submit_current ();
+
+      current.type  = type;
+      current.chars = chars;
+    } else {
+      current.chars += chars;
+    }
+  }
+
+  var whitespaceRE = /\s/;
+
+  while (last_index < length) {
+    var char = this.content[last_index];
+    var code = char.codePointAt (0);
+
+    if (code === 0x09) { /* tab */
+      for (var i = 0; i < tab_size; i++) {
+        append_to_current ("whitespace", ' ');
+      }
+
+      last_index++;
+    } else if (code === 0x20) { /* space */
+      append_to_current ("whitespace", ' ');
+      last_index++;
+    } else if (whitespaceRE.test (char)) {
+      append_to_current ("whitespace", char);
+      last_index++;
+    } else {
+      var rule = syntax ? syntax.match (this.content, last_index) : null;
+      if (rule) {
+        append_to_current (rule.type, this.content.substring (last_index, last_index + rule.length));
+        last_index += rule.length;
+      } else {
+        append_to_current ("text", char);
+        last_index++;
+      }
+    }
+  }
+
+  if (current.chars.length > 0) {
+    submit_current ();
+  }
+
+  this.render = elements;
 };
 
 EditorLine.prototype.onContentChanged = function () {
   this.ContentChanged.fire ();
+  this.store.onLineContentChanged (this);
+};
+
+EditorLine.prototype.onSelectionChanged = function () {
+  this.SelectionChanged.fire ();
 };
 
 EditorLine.prototype.onMarkerChanged = function () {
@@ -291,14 +249,25 @@ EditorLine.prototype.onClicked = function () {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
-var EditorCursor = function (store) {
-  this.store  = store;
-  this.line   = 0;
-  this.column = 0;
+var EditorCursor = function (store, id, primary) {
+  this.id        = id || null;
+  this.primary   = primary || false;
+  this.store     = store;
+  this.line      = 0;
+  this.column    = 0;
+  this.selection = [];
 
   this.LineChanged   = new EditorEvent ("EditorCursor.LineChanged");
   this.ColumnChanged = new EditorEvent ("EditorCursor.ColumnChanged");
   this.Changed       = new EditorEvent ("EditorCursor.Changed");
+};
+
+EditorCursor.prototype.clone = function () {
+  var clone = new EditorCursor (this.store);
+  clone.line   = this.line;
+  clone.column = this.column;
+  this.store.cursors.addCursor (clone);
+  return clone;
 };
 
 EditorCursor.prototype.getLine = function () {
@@ -391,6 +360,20 @@ EditorCursor.prototype.moveRight = function (columns, extend_selection) {
   }
 };
 
+EditorCursor.prototype.insertText = function (text) {
+  this.getLine ().insertText (this.column, text);
+  this.moveRight (text.length, false);
+};
+
+EditorCursor.prototype.deleteBackwards = function (count) {
+  this.getLine ().deleteText (this.column - 1, 1);
+  this.moveLeft (count, false);
+};
+
+EditorCursor.prototype.deleteForwards = function (count) {
+  this.getLine ().deleteText (this.column, 1);
+};
+
 /* Fire the 'LineChanged' with the two arguments (last line and new line) */
 EditorCursor.prototype.onLineChanged = function (last_line, line) {
   this.LineChanged.fire (last_line, line);
@@ -409,108 +392,447 @@ EditorCursor.prototype.onChanged = function () {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+var EditorCursorCollection = function (store) {
+  this.store     = store;
+  this.primary   = new EditorCursor (store, 0, true);
+  this.nextId    = 1;
+  this.secondary = [];
+  this.lastAdded = 0;
+
+  this.Blink      = new EditorEvent ("EditorCursorCollection.Blink");
+  this.blinkIndex = false;
+  this.blinker    = null;
+
+  this.CursorAdded   = new EditorEvent ("EditorCursorCollection.CursorAdded");
+  this.CursorRemoved = new EditorEvent ("EditorCursorCollection.CursorRemoved");
+};
+
+EditorCursorCollection.prototype.addCursor = function (cursor) {
+  cursor.id = this.nextId++;
+  this.secondary.push (cursor);
+  this.lastAdded = this.secondary.length;
+  this.onCursorAdded (cursor);
+};
+
+EditorCursorCollection.prototype.removeCursor = function (cursor) {
+  cursor.id = null;
+  this.removeCursorAt (this.secondary.indexOf (cursor));
+};
+
+EditorCursorCollection.prototype.removeCursorAt = function (index) {
+  var cursor = this.secondary[index];
+  if (this.lastAdded >= index + 1) {
+    this.lastAdded--;
+  }
+
+  this.secondary.splice (index, 1);
+  this.onCursorRemoved (cursor);
+};
+
+EditorCursorCollection.prototype.removeSecondary = function () {
+  var old_secondary = this.secondary;
+  this.secondary = [];
+
+  for (var i = 0; i < old_secondary.length; i++) {
+    this.onCursorRemoved (old_secondary[i]);
+  }
+};
+
+EditorCursorCollection.prototype.getLastAddedIndex = function () {
+  if (this.secondary.length === 0 || this.lastAdded === 0) {
+    return 0;
+  } else return this.lastAdded;
+};
+
+EditorCursorCollection.prototype.getAll = function () {
+  var result = [];
+
+  result[0] = this.primary;
+  for (var i = 0; i < this.secondary.length; i++) {
+    result[i + 1] = this.secondary[i];
+  }
+
+  return result;
+};
+
+EditorCursorCollection.prototype.getCursorOnLowestLine = function () {
+  if (this.secondary.length === 0) {
+    return this.primary;
+  } else return this.secondary[0];
+};
+
+EditorCursorCollection.prototype.getCursorOnHighestLine = function () {
+  if (this.secondary.length === 0) {
+    return this.primary;
+  } else return this.secondary[this.secondary.length - 1];
+};
+
+EditorCursorCollection.prototype.forEach = function (action) {
+  this.getAll ().forEach (action);
+};
+
+EditorCursorCollection.prototype.map = function (action) {
+  return this.getAll ().map (action);
+};
+
+EditorCursorCollection.prototype.stopBlink = function (set_to) {
+  window.clearInterval (this.blinker);
+  this.blinker    = null;
+  this.blinkIndex = set_to || false;
+  this.onBlinker (this.blinkIndex);
+};
+
+EditorCursorCollection.prototype.startBlink = function (set_to) {
+  if (this.blinker) {
+    window.clearInterval (this.blinker);
+  }
+
+  this.blinkIndex = set_to || false;
+  this.onBlinker (this.blinkIndex);
+
+  this.blinker = window.setInterval (function () {
+    this.blinkIndex = !this.blinkIndex;
+    this.onBlinker (this.blinkIndex);
+  }.bind (this), 500);
+};
+
+EditorCursorCollection.prototype.onBlinker = function () {
+  this.Blink.fire (this.blinkIndex);
+};
+
+EditorCursorCollection.prototype.onCursorAdded = function (cursor) {
+  this.startBlink (true);
+  this.CursorAdded.fire (cursor);
+};
+
+EditorCursorCollection.prototype.onCursorRemoved = function (cursor) {
+  this.startBlink (true);
+  this.CursorRemoved.fire (cursor);
+};
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
 var EditorKeymap = function (store, keymap) {
-  this.store          = store;
-  this.keymap_lut     = {};
-  this.key_matchers   = [];
-  this.regex_matchers = [];
+  this.store        = store;
+  this.mappings     = [];
+  this.mappingTable = {};
 
   this.deserialize (keymap);
+};
+
+EditorKeymap.Mapping = function (mode, key, shift, ctrl, alt, meta, command) {
+  this.mode    = mode;
+  this.key     = key;
+  this.shift   = typeof shift === "undefined" ? null : shift;
+  this.ctrl    = typeof ctrl  === "undefined" ? null : ctrl;
+  this.alt     = typeof alt   === "undefined" ? null : alt;
+  this.meta    = typeof meta  === "undefined" ? null : meta;
+  this.command = command;
+
+  if (mode !== null && typeof mode !== "string") {
+    throw new Error ("Expected 'mode' parameter to be a string ('up', 'down', 'press') or null; found " + typeof mode);
+  }
+
+  if (typeof key !== "string" && typeof key !== "function" && !(key instanceof RegExp)) {
+    throw new Error ("Expected 'key' parameter to be a string, function or RegExp; found " + typeof key);
+  }
+
+  if (this.shift !== null && typeof this.shift !== "boolean") {
+    throw new Error ("Expected 'shift' argument to be a boolean or null; found " + typeof shift);
+  }
+
+  if (this.ctrl !== null && typeof this.ctrl !== "boolean") {
+    throw new Error ("Expected 'ctrl' argument to be a boolean or null; found " + typeof ctrl);
+  }
+
+  if (this.alt !== null && typeof this.alt !== "boolean") {
+    throw new Error ("Expected 'alt' argument to be a boolean or null; found " + typeof alt);
+  }
+
+  if (this.meta !== null && typeof this.meta !== "boolean") {
+    throw new Error ("Expected 'meta' argument to be a boolean or null; found " + typeof meta);
+  }
+
+  if (typeof command !== "function") {
+    throw new Error ("Expected 'command' argument to be a function; found " + typeof command);
+  }
+
+  this.keyMatcher = null;
+  if (typeof this.key === "string") {
+    this.keyMatcher = function (event) {
+      return event.key === this.key;
+    }.bind (this);
+  } else if (typeof this.key === "function") {
+    this.keyMatcher = this.key;
+  } else if (this.key instanceof RegExp) {
+    this.keyMatcher = function (event) {
+      return this.key.test (event.key);
+    }.bind (this);
+  } else {
+    this.keyMatcher = function (event) {
+      console.warn ("Fallback key matcher discarding event", event.key);
+      return false;
+    }
+  }
+};
+
+EditorKeymap.Mapping.prototype.matchesEvent = function (mode, event) {
+  return (this.mode  === null || this.mode  === mode          ) &&
+         (this.shift === null || this.shift === event.shiftKey) &&
+         (this.ctrl  === null || this.ctrl  === event.ctrlKey ) &&
+         (this.alt   === null || this.alt   === event.altKey  ) &&
+         (this.meta  === null || this.meta  === event.metaKey ) &&
+         this.keyMatcher (event);
 };
 
 EditorKeymap.prototype.deserialize = function (map) {
   if (map instanceof Array) {
     map.forEach (function (mapping, index) {
-      if (typeof mapping === "object") {
-        var obj = Object.assign ({ key: null, down: true, shift: false, ctrl: false, alt: false, command: null }, mapping);
-        if (obj.key === "function") {
-          this.key_matchers.push (obj);
-        } else if (obj.key instanceof RegExp) {
-          this.regex_matchers.push (obj);
-        } else {
-          if (this.keymap_lut.hasOwnProperty (obj.key)) {
-            this.keymap_lut[obj.key].push (obj);
+      if (mapping instanceof EditorKeymap.Mapping) {
+        this.mappings.push (mapping);
+
+        if (typeof mapping.key === "string") {
+          if (this.mappingTable.hasOwnProperty (mapping.key)) {
+            this.mappingTable[mapping.key].push (mapping);
           } else {
-            this.keymap_lut[obj.key] = [obj];
+            this.mappingTable[mapping.key] = [mapping];
           }
         }
       } else {
-        console.warn ("Expected object in keymap element at index", index);
+        console.warn ("Expected instance of EditorKeymap.Mapping; found " + typeof mapping);
       }
     }.bind (this));
+
+    console.debug ("Loaded " + this.mappings.length + " key mappings");
   }
 };
 
-EditorKeymap.prototype.onKeyEvent = function (key, down, shift, ctrl, alt) {
-  const store    = this.store;
-  const mappings = this.keymap_lut[key];
-  const event    = { key: key, down: down, shift: shift, ctrl: ctrl, alt: alt };
+EditorKeymap.prototype.onKeyEvent = function (mode, event) {
+  console.log (mode, event.key, event.shift, event.ctrl, event.alt, event.meta);
+  const store = this.store;
 
-  if (mappings) {
-    mappings.forEach (function (mapping) {
-      if (mapping.down === down && mapping.shift === shift && mapping.ctrl === ctrl && mapping.alt === alt) {
-        mapping.command (store, event);
+  if (this.mappingTable.hasOwnProperty (event.key)) {
+    const mappings = this.mappingTable[event.key];
+    for (var i = 0; i < mappings.length; i++) {
+      if (mappings[i].matchesEvent (mode, event)) {
+        if (mappings[i].command (store, event)) {
+          return true;
+        }
       }
-    });
+    }
   }
 
-  this.regex_matchers.forEach (function (mapping) {
-    if (mapping.key.test (key) && mapping.down === down && mapping.shift === shift && mapping.ctrl === ctrl && mapping.alt === alt) {
-      mapping.command (store, event);
+  for (var i = 0; i < this.mappings.length; i++) {
+    if (this.mappings[i].matchesEvent (mode, event)) {
+      if (this.mappings[i].command (store, event)) {
+        return true;
+      }
     }
-  });
+  }
 
-  this.key_matchers.forEach (function (mapping) {
-    if (mapping.key (key) && mapping.down === down && mapping.shift === shift && mapping.ctrl === ctrl && mapping.alt === alt) {
-      mapping.command (store, event);
-    }
-  });
+  return false;
 };
 
-EditorKeymap.prototype.onKeyDown = function (key, shift, ctrl, alt) {
-  this.onKeyEvent (key, true, shift || false, ctrl || false, alt || false);
+EditorKeymap.prototype.onKeyDown = function (event) {
+  return this.onKeyEvent ("down", event);
 };
 
-EditorKeymap.prototype.onKeyUp = function (key, shift, ctrl, alt) {
-  this.onKeyEvent (key, false, shift || false, ctrl || false, alt || false);
+EditorKeymap.prototype.onKeyUp = function (event) {
+  return this.onKeyEvent ("up", event);
+};
+
+EditorKeymap.prototype.onKeyPress = function (event) {
+  return this.onKeyEvent ("press", event);
 };
 
 EditorKeymap.defaultKeymap = [
-  /* Standard direction keys */
-  { key: "ArrowLeft",  command: function (store, event) { store.cursor.moveLeft (1, false);  } },
-  { key: "ArrowRight", command: function (store, event) { store.cursor.moveRight (1, false); } },
-  { key: "ArrowUp",    command: function (store, event) { store.cursor.moveUp (1, false);    } },
-  { key: "ArrowDown",  command: function (store, event) { store.cursor.moveDown (1, false);  } },
+  /*
+   * Standard Cursor Direction
+   */
 
-  { key: "Home",       command: function (store, event) { store.cursor.setColumn (0); } },
-  { key: "End",        command: function (store, event) { store.cursor.setColumn (store.cursor.getLine ().getLength ()); } },
+  new EditorKeymap.Mapping ("down", "ArrowLeft", false, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.moveLeft (1, false);
+    });
 
-  { ctrl: true, key: "Home", command: function (store, event) { store.cursor.setLocation ({ line: 0, column: 0 }); } },
-  { ctrl: true, key: "End", command: function (store, event) {
-    var line = store.lines.length - 1;
+    return true;
+  }),
+
+  new EditorKeymap.Mapping ("down", "ArrowRight", false, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.moveRight (1, false);
+    });
+
+    return true;
+  }),
+
+  new EditorKeymap.Mapping ("down", "ArrowUp", false, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.moveUp (1, false);
+    });
+
+    return true;
+  }),
+
+  new EditorKeymap.Mapping ("down", "ArrowDown", false, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.moveDown (1, false);
+    });
+
+    return true;
+  }),
+
+  new EditorKeymap.Mapping ("down", "Home", false, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.setColumn (0);
+    });
+
+    return true;
+  }),
+
+  new EditorKeymap.Mapping ("down", "End", false, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.setColumn (cursor.getLine ().getLength ());
+    });
+
+    return true;
+  }),
+
+  new EditorKeymap.Mapping ("down", "Home", false, true, false, false, function (store, event) {
+    store.cursors.removeSecondary ();
+    store.cursors.primary.setLocation ({ line: 0, column: 0 });
+    return true;
+  }),
+
+  new EditorKeymap.Mapping ("down", "End", false, true, false, false, function (store, event) {
     if (store.lines.length > 0) {
-      console.log (line, store.lines[line].getLength ());
-      store.cursor.setLocation ({ line: line, column: store.lines[line].getLength () });
+      var length = store.lines[store.lines.length - 1].getLength ();
+
+      store.cursors.removeSecondary ();
+      store.cursors.primary.setLocation ({ line: store.lines.length - 1, column: length });
     } else {
-      store.cursor.setLocation ({ line: 0, column: 0 });
+      store.cursors.removeSecondary ();
+      store.cursors.primary.setLocation ({ line: 0, column: 0 });
     }
-  } },
+
+    return true;
+  }),
+
+  /*
+   * Cursor Duplication
+   */
+
+  new EditorKeymap.Mapping ("down", "ArrowUp", true, true, false, false, function (store, event) {
+    var lowest = store.cursors.getCursorOnLowestLine ();
+    var cursor = lowest.clone ();
+    cursor.moveUp (1, false);
+    return true;
+  }),
+
+  new EditorKeymap.Mapping ("down", "ArrowDown", true, true, false, false, function (store, event) {
+    var highest = store.cursors.getCursorOnHighestLine ();
+    var cursor  = highest.clone ();
+    cursor.moveDown (1, false);
+    return true;
+  }),
+
+  new EditorKeymap.Mapping ("down", "Escape", false, false, false, false, function (store, event) {
+    store.cursors.removeSecondary ();
+    return true;
+  }),
+
+  /*
+   * Character Input
+   */
+
+   new EditorKeymap.Mapping ("down", function (event) {
+     if (event.key.length === 1) {
+      return event.key.match (/(\w|\s|[-\[\]{}_=+;:'@#~,<.>\/\\?\!"£$%^&*()])/g);
+     } else return false;
+   }, null, false, false, false, function (store, event) {
+     store.cursors.forEach (function (cursor) {
+       cursor.insertText (event.key);
+     });
+
+     return true;
+   }),
+
+   new EditorKeymap.Mapping ("down", "Backspace", false, false, false, false, function (store, event) {
+     store.cursors.forEach (function (cursor) {
+       cursor.deleteBackwards (1);
+     });
+
+     return true;
+   }),
+
+   new EditorKeymap.Mapping ("down", "Delete", false, false, false, false, function (store, event) {
+     store.cursors.forEach (function (cursor) {
+       cursor.deleteForwards (1);
+     });
+
+     return true;
+   }),
+
+   new EditorKeymap.Mapping ("down", "Enter", false, false, false, false, function (store, event) {
+     store.cursors.forEach (function (cursor) {
+       cursor.newLine ();
+     });
+
+     return true;
+   }),
+
+   new EditorKeymap.Mapping ("down", "Tab", false, false, false, false, function (store, event) {
+     return true;
+   }),
 ];
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
-var EditorStore = function (config, initial) {
-  this.Scroll            = new EditorEvent ("EditorStore.Scroll");
-  this.CursorChanged     = new EditorEvent ("EditorStore.CursorChanged");
-  this.LineHeightChanged = new EditorEvent ("EditorStore.LineHeightChanged");
-  this.CharWidthChanged  = new EditorEvent ("EditorStore.CharWidthChanged");
+var EditorSyntax = function (config) {
+  this.config = config || {};
+};
 
-  this.BlinkTimer = new EditorTimer ("EditorStore.BlinkTimer", null, null, 500);
+EditorSyntax.prototype.match = function (content, index) {
+  var match = index ? content.substring (index) : content;
+
+  for (var key in this.config) {
+    var res = this.config[key].exec (match);
+    if (res) {
+      return { type: key, length: res[0].length };
+    }
+  }
+
+  return null;
+};
+
+EditorSyntax.JavaScript = {
+  "comment":        /^(\/\/.*)|^(\/\*(\*(?!\/)|[^*])*\*\/)/,
+  "string_literal": /^["'][^"'\\]*(\\.[^"'\\]*)*["']/,
+  "reserved_word":  /^(var|function|new|this|typeof|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|while|do)[^\w]/,
+  "identifier":     /^[_a-z][a-zA-Z0-9_]*/,
+  "type_name":      /^[A-Z][a-zA-Z0-9_]*/,
+  "number":         /^(0[xX])?[0-9]+(\.[0-9]*)?/,
+  "regexp":         /^\/.*\//,
+};
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
+var EditorStore = function (config, initial) {
+  this.Scroll             = new EditorEvent ("EditorStore.Scroll");
+  this.CursorChanged      = new EditorEvent ("EditorStore.CursorChanged");
+  this.CursorAdded        = new EditorEvent ("EditorStore.CursorAdded");
+  this.CursorRemoved      = new EditorEvent ("EditorStore.CursorRemoved");
+  this.LineHeightChanged  = new EditorEvent ("EditorStore.LineHeightChanged");
+  this.CharWidthChanged   = new EditorEvent ("EditorStore.CharWidthChanged");
+  this.LineContentChanged = new EditorEvent ("EditorStore.LineContentChanged");
+  this.ActiveLineChanged  = new EditorEvent ("EditorStore.ActiveLineChanged");
 
   this.config     = Object.assign ({}, EditorStore.defaultConfig, config);
+  this.syntax     = new EditorSyntax (this.config.syntax);
   this.keymap     = new EditorKeymap (this, this.config.keymap);
   this.lines      = [];
-  this.cursor     = new EditorCursor (this);
+  this.activeLine = 0;
+  this.cursors    = new EditorCursorCollection (this);
   this.lineHeight = 0;
   this.charWidth  = 0;
 
@@ -521,7 +843,11 @@ EditorStore.defaultConfig = {
   lineNumbers:        true,
   minLineNumberChars: 2,
   gutter:             true,
-  keymap:             EditorKeymap.defaultKeymap
+  keymap:             EditorKeymap.defaultKeymap,
+  mountFocused:       false,
+  tabSize:            2,
+  softTabs:           true,
+  syntax:             EditorSyntax.JavaScript
 };
 
 EditorStore.prototype.deserialize = function (obj) {
@@ -588,10 +914,10 @@ EditorStore.prototype.setCharWidth = function (width) {
 };
 
 EditorStore.prototype.clientToIndices = function (left, top) {
-  var result = { line: 0, column: 0 };
-  result.line = Math.floor (top / this.lineHeight);
-  result.column = Math.floor (left / this.charWidth);
-  return result;
+  return {
+    line:   Math.floor (top / this.lineHeight),
+    column: Math.round (left / this.charWidth)
+  };
 };
 
 EditorStore.prototype.indicesToClient = function (location) {
@@ -602,12 +928,26 @@ EditorStore.prototype.indicesToClient = function (location) {
   return result;
 };
 
+EditorStore.prototype.setCursorLocation = function (location) {
+  this.cursors.removeSecondary ();
+  this.cursors.primary.setLocation (location);
+};
+
 EditorStore.prototype.onScroll = function (scrollTop) {
   this.Scroll.fire (scrollTop);
 };
 
 EditorStore.prototype.onCursorChanged = function (cursor) {
+  this.cursors.startBlink (true);
   this.CursorChanged.fire (cursor);
+
+  if (cursor === this.cursors.primary) {
+    if (this.activeLine !== cursor.line) {
+      var prev = this.activeLine;
+      this.activeLine = cursor.line;
+      this.ActiveLineChanged.fire (prev, cursor.line);
+    }
+  }
 };
 
 EditorStore.prototype.onLineHeightChanged = function () {
@@ -616,6 +956,10 @@ EditorStore.prototype.onLineHeightChanged = function () {
 
 EditorStore.prototype.onCharWidthChanged = function () {
   this.CharWidthChanged.fire ();
+};
+
+EditorStore.prototype.onLineContentChanged = function (line) {
+  this.LineContentChanged.fire (line);
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
@@ -719,29 +1063,61 @@ var EditorCursorRender = React.createClass ({
     this.forceUpdate ();
   },
 
-  onBlinkChanged: function (timer) {
-    console.log (timer.round % 2 === 0);
+  onBlinkChanged: function (index) {
+    this.refs.cursor.style.visibility = index ? "visible" : "hidden";
   },
 
   componentDidMount: function () {
     this.props.cursor.Changed.bindTo (this, this.onCursorChanged);
     this.props.cursor.store.LineHeightChanged.bindTo (this, this.onDimensionsChanged);
     this.props.cursor.store.CharWidthChanged.bindTo (this, this.onDimensionsChanged);
-    this.props.cursor.store.BlinkTimer.Interval.bindTo (this, this.onBlinkChanged);
+    this.props.cursor.store.cursors.Blink.bindTo (this, this.onBlinkChanged);
   },
 
   componentWillUnmount: function () {
     this.props.cursor.Changed.unbindFrom (this);
     this.props.cursor.store.LineHeightChanged.unbindFrom (this);
     this.props.cursor.store.CharWidthChanged.unbindFrom (this);
-    this.props.cursor.store.BlinkTimer.Interval.unbindFrom (this);
+    this.props.cursor.store.cursors.Blink.unbindFrom (this);
   },
 
   render: function () {
     const cursor = this.props.cursor;
     const client = cursor.store.indicesToClient (cursor);
 
-    return <div className="cursor" style={client} />;
+    /* Make sure the initial visibility of a cursor corresponds to all others */
+    client.visibility = cursor.store.cursors.blinkIndex ? "visible" : "hidden";
+    return <div ref="cursor" className={EditorTools.joinClasses ("cursor", cursor.primary ? "" : "secondary")} style={client} />;
+  }
+});
+
+var EditorRenderCursorContainer = React.createClass ({
+  propTypes: {
+    cursors: React.PropTypes.instanceOf (EditorCursorCollection).isRequired
+  },
+
+  onCursorsChanged: function () {
+    this.forceUpdate ();
+  },
+
+  componentDidMount: function () {
+    this.props.cursors.CursorAdded.bindTo (this, this.onCursorsChanged);
+    this.props.cursors.CursorRemoved.bindTo (this, this.onCursorsChanged);
+    this.props.cursors.primary.Changed.bindTo (this, this.onCursorsChanged);
+  },
+
+  componentWillUnmount: function () {
+    this.props.cursors.CursorAdded.unbindFrom (this);
+    this.props.cursors.CursorRemoved.unbindFrom (this);
+    this.props.cursors.primary.Changed.unbindFrom (this);
+  },
+
+  render: function () {
+    const cursors = this.props.cursors.map (function (cursor, index) {
+      return <EditorCursorRender key={index} cursor={cursor} />;
+    });
+
+    return <div className="cursors">{cursors}</div>;
   }
 });
 
@@ -752,15 +1128,62 @@ var EditorRenderLine = React.createClass ({
     line: React.PropTypes.instanceOf (EditorLine).isRequired
   },
 
+  onContentChanged: function () {
+    this.forceUpdate ();
+  },
+
+  onSelectionChanged: function () {
+    this.forceUpdate ();
+  },
+
+  onActiveLineChanged: function (prev, next) {
+    if (prev === next) return;
+
+    var element = this.refs.line;
+    if (prev === this.props.line.index) {
+      element.className = element.className.replace (/\scurrent-line/, '');
+    } else if (next === this.props.line.index) {
+      element.className += " current-line";
+    }
+  },
+
+  componentDidMount: function () {
+    this.props.line.ContentChanged.bindTo (this, this.onContentChanged);
+    this.props.line.SelectionChanged.bindTo (this, this.onSelectionChanged);
+    this.props.line.store.ActiveLineChanged.bindTo (this, this.onActiveLineChanged);
+  },
+
+  componentWillUnmount: function () {
+    this.props.line.ContentChanged.unbindFrom (this);
+    this.props.line.SelectionChanged.unbindFrom (this);
+    this.props.line.store.ActiveLineChanged.unbindFrom (this);
+  },
+
+  renderElement: function (element, index) {
+    return <span key={index} className={element.type}>{element.chars}</span>;
+  },
+
   render: function () {
     const line      = this.props.line;
-    const cursor    = line.store.cursor;
+    const primary   = line.store.cursors.primary;
+    const content   = line.render.map (this.renderElement);
     const classname = {
       "line":         true,
-      "current-line": line.index === cursor.line
+      "current-line": line.index === primary.line
     };
 
-    return <div className={EditorTools.joinClasses (classname)}>{line.content}</div>;
+    const charWidth  = line.store.charWidth;
+    const selections = Object.keys (line.selection).map (function (cursor_id) {
+      const selection = line.selection[cursor_id];
+      return <div key={cursor_id} className="selection" style={{ left: selection.start * charWidth, width: (selection.end - selection.start) * charWidth }}></div>;
+    });
+
+    return (
+      <div ref="line" className={EditorTools.joinClasses (classname)}>
+        {selections}
+        {content}
+      </div>
+    );
   }
 });
 
@@ -779,19 +1202,21 @@ var EditorRenderLines = React.createClass ({
     var top         = (event.clientY - client_rect.top) + lines.scrollTop;
     var left        = (event.clientX - client_rect.left) + lines.scrollLeft;
     var location    = this.props.store.clientToIndices (left, top);
-    this.props.store.cursor.setLocation (location);
+
+    this.props.store.cursors.removeSecondary ();
+    this.props.store.cursors.primary.setLocation (location);
   },
 
-  onCursorChanged: function () {
+  onCharDimensionsChanged: function () {
     this.forceUpdate ();
   },
 
   componentDidMount: function () {
-    this.props.store.CursorChanged.bindTo (this, this.onCursorChanged);
+    this.props.store.CharWidthChanged.bindTo (this, this.onCharDimensionsChanged);
   },
 
   componentWillUnmount: function () {
-    this.props.store.CursorChanged.unbindFrom (this);
+    this.props.store.CharWidthChanged.unbindFrom (this);
   },
 
   render: function () {
@@ -806,7 +1231,7 @@ var EditorRenderLines = React.createClass ({
            onScroll={this.onScroll}
            onClick={this.onClick}>
         {lines}
-        <EditorCursorRender cursor={this.props.store.cursor} />
+        <EditorRenderCursorContainer cursors={this.props.store.cursors} />
       </div>
     );
   }
@@ -820,11 +1245,32 @@ var Editor = React.createClass ({
   },
 
   onKeyDown: function (event) {
-    this.props.store.keymap.onKeyDown (event.key, event.shiftKey || false, event.ctrlKey || false, event.altKey || false);
+    if (this.props.store.keymap.onKeyDown (event)) {
+      event.preventDefault ();
+      event.stopPropagation ();
+    }
   },
 
   onKeyUp: function (event) {
-    this.props.store.keymap.onKeyUp (event.key, event.shiftKey || false, event.ctrlKey || false, event.altKey || false);
+    if (this.props.store.keymap.onKeyUp (event)) {
+      event.preventDefault ();
+      event.stopPropagation ();
+    }
+  },
+
+  onKeyPress: function (event) {
+    if (this.props.store.keymap.onKeyPress (event)) {
+      event.preventDefault ();
+      event.stopPropagation ();
+    }
+  },
+
+  onFocus: function () {
+    this.props.store.cursors.startBlink (true);
+  },
+
+  onBlur: function () {
+    this.props.store.cursors.stopBlink (false);
   },
 
   updateFromCharGuide: function () {
@@ -835,14 +1281,18 @@ var Editor = React.createClass ({
 
   componentDidMount: function () {
     this.updateFromCharGuide ();
-    this.refs.container.focus ();
+    if (this.props.store.config.mountFocused) {
+      window.setTimeout (function () {
+        this.refs.container.focus ();
+      }.bind (this));
+    }
   },
 
   render: function () {
     const store = this.props.store;
 
     return (
-      <div ref="container" className="editor" tabIndex={1} onKeyDown={this.onKeyDown} onKeyUp={this.onKeyUp}>
+      <div ref="container" className="editor" tabIndex={1} onKeyDown={this.onKeyDown} onKeyUp={this.onKeyUp} onFocus={this.onFocus} onBlur={this.onBlur}>
         <div ref="charGuide" className="editor-char-guide">MM</div>
         <EditorRenderLineNumbers store={store} />
         <EditorRenderGutter store={store} />

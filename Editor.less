@@ -86,9 +86,48 @@ div.editor {
           border-bottom: 1px solid #3d3d3d;
           content: '';
         }
+      }
 
-        // border-top: 1px solid #3d3d3d;
-        // border-bottom: 1px solid #3d3d3d;
+      div.selection {
+        position: absolute;
+        top: 0;
+        bottom: -1px;
+        z-index: 100;
+        background-color: #1a5a87;
+        border-radius: 2px;
+      }
+
+      span {
+        position: relative;
+        z-index: 200;
+
+        &.comment {
+          color: #45804e;
+        }
+
+        &.reserved_word {
+          color: #4688bf;
+        }
+
+        &.identifier {
+          color: #98cbeb;
+        }
+
+        &.type_name {
+          color: #42c399;
+        }
+
+        &.string_literal {
+          color: #b28d6c;
+        }
+
+        &.number {
+          color: #abc89f;
+        }
+
+        &.regexp {
+          color: #cb6664;
+        }
       }
     }
   }
@@ -101,5 +140,9 @@ div.editor {
     height: @editor-line-height * @editor-font-size;
     background-color: #fff;
     .fixed-mixin();
+
+    &.secondary {
+      background-color: #aaa;
+    }
   }
 }
