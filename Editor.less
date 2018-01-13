@@ -5,6 +5,17 @@
   font-family: monospace;
 }
 
+/* https://stackoverflow.com/questions/826782/how-to-disable-text-selection-highlighting */
+.noselect() {
+  -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome and Opera */
+}
+
 div.editor {
   position: relative;
   width: 100%;
@@ -67,6 +78,7 @@ div.editor {
       height: @editor-line-height * @editor-font-size;
       white-space: pre;
       .fixed-mixin();
+      .noselect();
 
       &.current-line {
         &:before {
@@ -86,15 +98,6 @@ div.editor {
           border-bottom: 1px solid #3d3d3d;
           content: '';
         }
-      }
-
-      div.selection {
-        position: absolute;
-        top: 0;
-        bottom: -1px;
-        z-index: 100;
-        background-color: #1a5a87;
-        border-radius: 2px;
       }
 
       span {
@@ -139,10 +142,24 @@ div.editor {
     width: 2px;
     height: @editor-line-height * @editor-font-size;
     background-color: #fff;
+    z-index: 200;
     .fixed-mixin();
 
     &.secondary {
       background-color: #aaa;
+    }
+  }
+
+  div.selection-block {
+    position: absolute;
+    min-width: 0.5em;
+    height: (@editor-line-height * @editor-font-size) + 1;
+    z-index: 100;
+    background-color: #1a5a87;
+    border-radius: 2px;
+
+    &:last-child {
+      min-width: 0;
     }
   }
 }

@@ -77,6 +77,287 @@ EditorTools.joinClasses = function () {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+var EditorPosition = function (line, column) {
+  this.line   = line;
+  this.column = column;
+};
+
+EditorPosition.prototype.clone = function () {
+  return new EditorPosition (this.line, this.column);
+};
+
+EditorPosition.prototype.toString = function () {
+  return "(" + this.line + ":" + this.column + ")";
+};
+
+EditorPosition.prototype.equals = function (other) {
+  return other.line === this.line && other.column === this.column;
+};
+
+EditorPosition.prototype.isBefore = function (other) {
+  if (this.line < other.line) {
+    return true;
+  }
+
+  if (this.line > other.line) {
+    return false;
+  }
+
+  return this.column < other.column;
+};
+
+EditorPosition.prototype.isBeforeOrEqual = function (other) {
+  if (this.line < other.line) {
+    return false;
+  }
+
+  if (this.line > other.line) {
+    return false;
+  }
+
+  return this.column <= other.column;
+};
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
+var EditorRange = function (start_line, start_col, end_line, end_col) {
+  this.set (start_line, start_col, end_line, end_col);
+};
+
+EditorRange.prototype.toString = function () {
+  return "[" + this.start_line + ":" + this.start_column + "," + this.end_line + ":" + this.end_column + "]";
+};
+
+EditorRange.prototype.set = function (start_line, start_col, end_line, end_col) {
+  if ((start_line > end_line) || (start_line === end_line && start_col > end_col)) {
+    this.start_line   = end_line;
+    this.start_column = end_col;
+    this.end_line     = start_line;
+    this.end_column   = start_col;
+  } else {
+    this.start_line   = start_line;
+    this.start_column = start_col;
+    this.end_line     = end_line;
+    this.end_column   = end_col;
+  }
+};
+
+EditorRange.isEmpty = function (range) {
+  return (range.start_line === range.end_line && range.start_column === range.end_column);
+};
+
+EditorRange.prototype.isEmpty = function () {
+  return EditorRange.isEmpty (this);
+};
+
+EditorRange.fromPosition = function (position) {
+  return new EditorRange (position.line, position.column, position.line, position.column);
+};
+
+EditorRange.containsPosition = function (range, position) {
+  if (position.line < range.start_line || position.line > range.end_line) {
+    return false;
+  }
+
+  if (position.line === range.start_line && position.column < range.start_column) {
+    return false;
+  }
+
+  if (position.line === range.end_line && position.column > range.end_column) {
+    return false;
+  }
+
+  return true;
+}
+
+EditorRange.prototype.containsPosition = function (position) {
+  return EditorRange.containsPosition (position);
+};
+
+EditorRange.containsRange = function (range, other) {
+  if (other.start_line < range.start_line || other.end_line < range.start_line) {
+    return false;
+  }
+
+  if (other.start_line > range.end_line || other.end_line > range.end_line) {
+    return false;
+  }
+
+  if (other.start_line === range.start_line && other.start_column < range.start_column) {
+    return false;
+  }
+
+  if (other.end_line === range.end_line && other.end_column > range.end_column) {
+    return false;
+  }
+
+  return true;
+};
+
+EditorRange.prototype.containsRange = function (other) {
+  EditorRange.containsRange (this, other);
+};
+
+EditorRange.plusRange = function (a, b) {
+  var start_line, start_col, end_line, end_col;
+
+  if (b.start_line < a.start_line) {
+    start_line = b.start_line;
+    start_col = b.start_column;
+  } else if (b.start_line === b.start_line) {
+    start_line = b.start_line;
+    start_col = Math.min (a.start_column, b.start_column);
+  } else {
+    start_line = a.start_line;
+    start_col = a.start_column;
+  }
+
+  if (b.end_line > a.end_line) {
+    end_line = b.end_line;
+    end_col = b.end_column;
+  } else if (b.end_line === a.end_line) {
+    end_line = b.end_line;
+    end_col = Math.max (b.end_column, a.end_column);
+  } else {
+    end_line = a.end_line;
+    end_col = a.end_column;
+  }
+
+  return new EditorRange (start_line, start_col, end_line, end_col);
+};
+
+EditorRange.prototype.plusRange = function (other) {
+  return EditorRange.plusRange (this, range);
+};
+
+EditorRange.intersectRanges = function (a, b) {
+  var result_start_line = a.start_line;
+  var result_start_col = a.start_column;
+  var result_end_line = a.end_line;
+  var result_end_col = a.end_column;
+  var other_start_line = b.start_line;
+  var other_start_col = b.start_column;
+  var other_end_line = b.end_line;
+  var other_end_col = b.end_column;
+
+  if (result_start_line < other_start_line) {
+    result_start_line = other_start_line;
+    result_start_col = other_start_col;
+  } else if (result_start_line === other_start_line) {
+    result_start_column = Math.max (result_start_col, other_start_col);
+  }
+
+  if (result_end_line > other_end_line) {
+    result_end_line = other_end_line;
+    result_end_col = other_end_col;
+  } else if (result_end_line === other_end_Line) {
+    result_end_col = Math.min (result_end_col, other_end_col);
+  }
+
+  if (result_start_line > result_end_line) {
+    return null;
+  }
+
+  if (result_start_line === result_end_line && result_start_col > result_end_col) {
+    return null;
+  }
+
+  return new EditorRange (result_start_line, result_start_col, result_end_line, result_end_col);
+};
+
+EditorRange.prototype.intersectRange = function (other) {
+  return EditorRange.intersectRanges (this, other);
+};
+
+EditorRange.equalsRange = function (a, b) {
+  return !!a && !!b && a.start_line === b.start_line && a.start_column === b.start_column && a.end_line === b.end_line && a.end_column === b.end_column;
+};
+
+EditorRange.prototype.equalsRange = function (other) {
+  return EditorRange.equalsRange (this, other);
+};
+
+EditorRange.prototype.getStartLocation = function () {
+  return new EditorPosition (this.start_line, this.start_column);
+};
+
+EditorRange.prototype.getEndLocation = function () {
+  return new EditorPosition (this.end_line, this.end_column);
+};
+
+EditorRange.prototype.setStartLocation = function (location) {
+  this.start_line   = location.line;
+  this.start_column = location.column;
+};
+
+EditorRange.prototype.setEndLocation = function (location) {
+  this.end_line   = location.line;
+  this.end_column = location.column;
+};
+
+EditorRange.prototype.collapseToStart = function () {
+  return EditorRange.collapseToStart (this);
+};
+
+EditorRange.prototype.spansMultipleLines = function () {
+  return this.end_line > this.start_line;
+};
+
+EditorRange.prototype.collapseToStart = function () {
+  this.end_line   = this.start_line;
+  this.end_column = this.end_column;
+};
+
+EditorRange.fromLocations = function (start, end) {
+  return new EditorRange (start.line, start.column, end.line, end.column);
+};
+
+EditorRange.areIntersectingOrTouching = function (a, b) {
+  if (a.end_line < b.start_line || (a.end_line === b.start_line && a.end_column < b.start_column)) {
+    return false;
+  }
+
+  if (b.end_line < a.start_line || (b.end_line === a.start_line && b.end_column < a.start_column)) {
+    return false;
+  }
+
+  return true;
+};
+
+EditorRange.compareRangesUsingStarts = function (a, b) {
+  if (a.start_line === b.start_line) {
+    if (a.start_column === b.start_column) {
+      if (a.end_line === b.end_line) {
+        return a.end_column - b.end_column;
+      } else {
+        return a.end_line - b.end_line;
+      }
+    } else {
+      return a.start_column - b.start_column;
+    }
+  } else {
+    return b.start_line - a.start_line;
+  }
+};
+
+EditorRange.compareRangesUsingEnds = function (a, b) {
+  if (a.end_line === b.end_line) {
+    if (a.end_column === b.end_column) {
+      if (a.start_line === b.start_line) {
+        return a.start_column - b.start_column;
+      } else {
+        return a.start_line - b.start_line;
+      }
+    } else {
+      return a.end_column - b.end_column;
+    }
+  } else {
+    return a.end_line - b.end_line;
+  }
+}
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
 var EditorLineMarker = function () {
 };
 
@@ -85,17 +366,9 @@ var EditorLine = function (store, index, content) {
   this.index     = index;
   this.content   = content;
   this.marker    = null;
-  this.selection = {};
   this.render    = [];
 
-  if (index === 4) {
-    this.selection[0] = { start: 4, end: 8 };
-  } else if (index === 5) {
-    this.selection[0] = { start: 2, end: 10 };
-  }
-
   this.ContentChanged   = new EditorEvent ("EditorLine.ContentChanged");
-  this.SelectionChanged = new EditorEvent ("EditorLine.SelectionChanged");
   this.MarkerChanged    = new EditorEvent ("EditorLine.MarkerChanged");
   this.Clicked          = new EditorEvent ("EditorLine.Clicked");
 
@@ -120,18 +393,6 @@ EditorLine.prototype.insertText = function (index, text) {
 
 EditorLine.prototype.deleteText = function (index, count) {
   this.setContent (this.content.slice (0, index) + this.content.slice (index + count));
-};
-
-EditorLine.prototype.cancelSelection = function (cursor) {
-  if (cursor.id in this.selection) {
-    delete this.selection[cursor.id];
-    this.onSelectionChanged ();
-  }
-};
-
-EditorLine.prototype.updateSelection = function (cursor, selection) {
-  this.selection[cursor.id] = selection;
-  this.onSelectionChanged ();
 };
 
 EditorLine.prototype.getLength = function () {
@@ -235,10 +496,6 @@ EditorLine.prototype.onContentChanged = function () {
   this.store.onLineContentChanged (this);
 };
 
-EditorLine.prototype.onSelectionChanged = function () {
-  this.SelectionChanged.fire ();
-};
-
 EditorLine.prototype.onMarkerChanged = function () {
   this.MarkerChanged.fire ();
 };
@@ -249,129 +506,220 @@ EditorLine.prototype.onClicked = function () {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+var EditorSelection = function (start) {
+  this.start  = start;
+  this.region = EditorRange.fromPosition (start);
+};
+
+EditorSelection.prototype.adjustForCursor = function (location) {
+  if (location.isBeforeOrEqual (this.start)) {
+    this.region.set (location.line, location.column, this.start.line, this.start.column);
+  } else {
+    this.region.set (this.start.line, this.start.column, location.line, location.column);
+  }
+};
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
 var EditorCursor = function (store, id, primary) {
   this.id        = id || null;
   this.primary   = primary || false;
   this.store     = store;
-  this.line      = 0;
-  this.column    = 0;
-  this.selection = [];
+  this.position  = new EditorPosition (0, 0);
+  this.selection = null;
 
-  this.LineChanged   = new EditorEvent ("EditorCursor.LineChanged");
-  this.ColumnChanged = new EditorEvent ("EditorCursor.ColumnChanged");
-  this.Changed       = new EditorEvent ("EditorCursor.Changed");
+  this.LineChanged      = new EditorEvent ("EditorCursor.LineChanged");
+  this.ColumnChanged    = new EditorEvent ("EditorCursor.ColumnChanged");
+  this.Changed          = new EditorEvent ("EditorCursor.Changed");
+  this.SelectionChanged = new EditorEvent ("EditorCursor.SelectionChanged");
 };
 
 EditorCursor.prototype.clone = function () {
   var clone = new EditorCursor (this.store);
-  clone.line   = this.line;
-  clone.column = this.column;
+  clone.position = this.position.clone ();
   this.store.cursors.addCursor (clone);
   return clone;
 };
 
 EditorCursor.prototype.getLine = function () {
-  return this.store.lines[this.line];
+  return this.store.lines[this.position.line];
 };
 
 EditorCursor.prototype.setLine = function (line) {
   line = Math.min (this.store.getMaxLineNumber () - 1, Math.max (0, line));
 
-  if (line !== this.line) {
-    var last_line = this.line;
-    this.line     = line;
+  if (line !== this.position.line) {
+    var last_line = this.position.line;
+    this.position.line = line;
     this.onLineChanged (last_line, line);
     this.onChanged ();
   }
 };
 
 EditorCursor.prototype.setColumn = function (column) {
-  var line = this.store.lines[this.line];
+  var line     = this.store.lines[this.position.line];
 
   column = Math.min (line.getLength (), Math.max (0, column));
-  if (column !== this.column) {
-    var last_column = this.column;
-    this.column     = column;
+  if (column !== this.position.column) {
+    var last_column = this.position.column;
+    this.position.column = column;
     this.onColumnChanged (last_column, column);
     this.onChanged ();
   }
 };
 
-EditorCursor.prototype.setLocation = function (location) {
+EditorCursor.prototype.getLocation = function () {
+  return this.position.clone ();
+};
+
+EditorCursor.prototype.setLocation = function (location, extend_selection) {
+  var prev_loc     = this.getLocation ();
   var line_index   = Math.min (this.store.getMaxLineNumber () - 1, Math.max (0, location.line));
   var line         = this.store.lines[line_index];
   var column_index = Math.min (line.getLength (), Math.max (0, location.column));
 
   var changed = false;
 
-  if (this.line != line_index) {
-    var last_line = this.line;
+  if (this.position.line != line_index) {
+    var last_line = this.position.line;
 
-    changed   = true;
-    this.line = line_index;
+    changed            = true;
+    this.position.line = line_index;
     this.onLineChanged (last_line, line_index);
   }
 
-  if (this.column != column_index) {
-    var last_column = this.column;
+  if (this.position.column != column_index) {
+    var last_column = this.position.column;
 
-    changed     = true;
-    this.column = column_index;
+    changed              = true;
+    this.position.column = column_index;
     this.onColumnChanged (last_column, column_index);
   }
 
   if (changed) {
     this.onChanged ();
   }
+
+  if (extend_selection) {
+    this.extendSelection (prev_loc);
+  } else this.removeSelection ();
 };
 
 EditorCursor.prototype.moveUp = function (lines, extend_selection) {
-  this.setLine (this.line - lines);
+  var prev_loc = this.getLocation ();
+
+  this.setLine (this.position.line - lines);
 
   var length = this.getLine ().getLength ();
-  if (this.column > length) {
+  if (this.position.column > length) {
     this.setColumn (length);
   }
+
+  if (extend_selection) {
+    this.extendSelection (prev_loc);
+  } else this.removeSelection ();
 };
 
 EditorCursor.prototype.moveDown = function (lines, extend_selection) {
-  this.setLine (this.line + lines);
+  var prev_loc = this.getLocation ();
+
+  this.setLine (this.position.line + lines);
 
   var length = this.getLine ().getLength ();
-  if (this.column > length) {
+  if (this.position.column > length) {
     this.setColumn (length);
   }
+
+  if (extend_selection) {
+    this.extendSelection (prev_loc);
+  } else this.removeSelection ();
 };
 
 EditorCursor.prototype.moveLeft = function (columns, extend_selection) {
-  if (this.column === 0 && this.line > 0) {
-    var line = this.store.lines[this.line - 1];
-    this.setLocation ({ line: this.line - 1, column: line.getLength () });
-  } else {
-    this.setColumn (this.column - columns);
+  if (!extend_selection && this.selection) {
+    this.setLocation (this.selection.region.getStartLocation ());
+    this.removeSelection ();
+    return;
   }
+
+  var prev_loc = this.getLocation ();
+
+  if (this.position.column === 0 && this.position.line > 0) {
+    var line = this.store.lines[this.position.line - 1];
+    this.setLocation ({ line: this.position.line - 1, column: line.getLength () });
+  } else {
+    this.setColumn (this.position.column - columns);
+  }
+
+  if (extend_selection) {
+    this.extendSelection (prev_loc);
+  } else this.removeSelection ();
 };
 
 EditorCursor.prototype.moveRight = function (columns, extend_selection) {
-  if (this.column === this.getLine ().getLength () && this.line < this.store.lines.length) {
-    this.setLocation ({ line: this.line + 1, column: 0 });
-  } else {
-    this.setColumn (this.column + columns);
+  if (!extend_selection && this.selection) {
+    this.setLocation (this.selection.region.getEndLocation ());
+    this.removeSelection ();
+    return;
   }
+
+  var prev_loc = this.getLocation ();
+
+  if (this.position.column === this.getLine ().getLength () && this.position.line < this.store.lines.length) {
+    this.setLocation ({ line: this.position.line + 1, column: 0 });
+  } else {
+    this.setColumn (this.position.column + columns);
+  }
+
+  if (extend_selection) {
+    this.extendSelection (prev_loc);
+  } else this.removeSelection ();
+};
+
+EditorCursor.prototype.moveStart = function (extend_selection) {
+  var prev_loc = this.getLocation ();
+  this.setColumn (0);
+  if (extend_selection) {
+    this.extendSelection (prev_loc);
+  } else this.removeSelection ();
+};
+
+EditorCursor.prototype.moveEnd = function (extend_selection) {
+  var prev_loc = this.getLocation ();
+  this.setColumn (this.getLine ().getLength ());
+  if (extend_selection) {
+    this.extendSelection (prev_loc);
+  } else this.removeSelection ();
 };
 
 EditorCursor.prototype.insertText = function (text) {
-  this.getLine ().insertText (this.column, text);
+  this.getLine ().insertText (this.position.column, text);
   this.moveRight (text.length, false);
 };
 
 EditorCursor.prototype.deleteBackwards = function (count) {
-  this.getLine ().deleteText (this.column - 1, 1);
+  this.getLine ().deleteText (this.position.column - 1, 1);
   this.moveLeft (count, false);
 };
 
 EditorCursor.prototype.deleteForwards = function (count) {
-  this.getLine ().deleteText (this.column, 1);
+  this.getLine ().deleteText (this.position.column, 1);
+};
+
+EditorCursor.prototype.extendSelection = function (prev_loc) {
+  if (!this.selection) {
+    this.selection = new EditorSelection (prev_loc);
+  }
+
+  this.selection.adjustForCursor (this.position);
+  this.onSelectionChanged ();
+};
+
+EditorCursor.prototype.removeSelection = function () {
+  if (this.selection) {
+    this.selection = null;
+    this.onChanged ();
+  }
 };
 
 /* Fire the 'LineChanged' with the two arguments (last line and new line) */
@@ -388,6 +736,10 @@ EditorCursor.prototype.onColumnChanged = function (last_column, column) {
 EditorCursor.prototype.onChanged = function () {
   this.Changed.fire ();
   this.store.onCursorChanged (this);
+};
+
+EditorCursor.prototype.onSelectionChanged = function () {
+  this.SelectionChanged.fire ();
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
@@ -407,9 +759,16 @@ var EditorCursorCollection = function (store) {
   this.CursorRemoved = new EditorEvent ("EditorCursorCollection.CursorRemoved");
 };
 
+EditorCursorCollection.prototype.sortSecondary = function () {
+  this.secondary.sort (function (a, b) {
+    return a.position.line - b.position.line;
+  });
+};
+
 EditorCursorCollection.prototype.addCursor = function (cursor) {
   cursor.id = this.nextId++;
   this.secondary.push (cursor);
+  this.sortSecondary ();
   this.lastAdded = this.secondary.length;
   this.onCursorAdded (cursor);
 };
@@ -608,7 +967,7 @@ EditorKeymap.prototype.deserialize = function (map) {
 };
 
 EditorKeymap.prototype.onKeyEvent = function (mode, event) {
-  console.log (mode, event.key, event.shift, event.ctrl, event.alt, event.meta);
+  console.log (mode, event.key, event.shiftKey, event.ctrlKey, event.altKey, event.metaKey);
   const store = this.store;
 
   if (this.mappingTable.hasOwnProperty (event.key)) {
@@ -650,49 +1009,49 @@ EditorKeymap.defaultKeymap = [
    * Standard Cursor Direction
    */
 
-  new EditorKeymap.Mapping ("down", "ArrowLeft", false, false, false, false, function (store, event) {
+  new EditorKeymap.Mapping ("down", "ArrowLeft", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
-      cursor.moveLeft (1, false);
+      cursor.moveLeft (1, event.shiftKey);
     });
 
     return true;
   }),
 
-  new EditorKeymap.Mapping ("down", "ArrowRight", false, false, false, false, function (store, event) {
+  new EditorKeymap.Mapping ("down", "ArrowRight", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
-      cursor.moveRight (1, false);
+      cursor.moveRight (1, event.shiftKey);
     });
 
     return true;
   }),
 
-  new EditorKeymap.Mapping ("down", "ArrowUp", false, false, false, false, function (store, event) {
+  new EditorKeymap.Mapping ("down", "ArrowUp", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
-      cursor.moveUp (1, false);
+      cursor.moveUp (1, event.shiftKey);
     });
 
     return true;
   }),
 
-  new EditorKeymap.Mapping ("down", "ArrowDown", false, false, false, false, function (store, event) {
+  new EditorKeymap.Mapping ("down", "ArrowDown", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
-      cursor.moveDown (1, false);
+      cursor.moveDown (1, event.shiftKey);
     });
 
     return true;
   }),
 
-  new EditorKeymap.Mapping ("down", "Home", false, false, false, false, function (store, event) {
+  new EditorKeymap.Mapping ("down", "Home", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
-      cursor.setColumn (0);
+      cursor.moveStart (event.shiftKey);
     });
 
     return true;
   }),
 
-  new EditorKeymap.Mapping ("down", "End", false, false, false, false, function (store, event) {
+  new EditorKeymap.Mapping ("down", "End", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
-      cursor.setColumn (cursor.getLine ().getLength ());
+      cursor.moveEnd (event.shiftKey);
     });
 
     return true;
@@ -738,6 +1097,7 @@ EditorKeymap.defaultKeymap = [
 
   new EditorKeymap.Mapping ("down", "Escape", false, false, false, false, function (store, event) {
     store.cursors.removeSecondary ();
+    store.cursors.primary.removeSelection ();
     return true;
   }),
 
@@ -942,10 +1302,10 @@ EditorStore.prototype.onCursorChanged = function (cursor) {
   this.CursorChanged.fire (cursor);
 
   if (cursor === this.cursors.primary) {
-    if (this.activeLine !== cursor.line) {
+    if (this.activeLine !== cursor.position.line) {
       var prev = this.activeLine;
-      this.activeLine = cursor.line;
-      this.ActiveLineChanged.fire (prev, cursor.line);
+      this.activeLine = cursor.position.line;
+      this.ActiveLineChanged.fire (prev, cursor.position.line);
     }
   }
 };
@@ -1050,7 +1410,7 @@ var EditorRenderGutter = React.createClass ({
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
-var EditorCursorRender = React.createClass ({
+var EditorRenderCursor = React.createClass ({
   propTypes: {
     cursor: React.PropTypes.instanceOf (EditorCursor).isRequired
   },
@@ -1083,11 +1443,68 @@ var EditorCursorRender = React.createClass ({
 
   render: function () {
     const cursor = this.props.cursor;
-    const client = cursor.store.indicesToClient (cursor);
+    console.log ("cursor", cursor.position);
+    const client = cursor.store.indicesToClient (cursor.position);
 
     /* Make sure the initial visibility of a cursor corresponds to all others */
     client.visibility = cursor.store.cursors.blinkIndex ? "visible" : "hidden";
     return <div ref="cursor" className={EditorTools.joinClasses ("cursor", cursor.primary ? "" : "secondary")} style={client} />;
+  }
+});
+
+var EditorRenderCursorSelection = React.createClass ({
+  propTypes: {
+    cursor: React.PropTypes.instanceOf (EditorCursor).isRequired
+  },
+
+  computeLineBlocks: function () {
+    const cursor     = this.props.cursor;
+    const store      = cursor.store;
+    const lineHeight = store.lineHeight;
+    const charWidth  = store.charWidth;
+    const selection  = cursor.selection.region;
+
+    this.selection_blocks = [];
+    for (var i = selection.start_line; i <= selection.end_line; i++) {
+      const line  = store.lines[i];
+      const left  = i === selection.start_line ? selection.start_column : 0;
+      const right = i === selection.end_line ? selection.end_column : line.getLength ();
+
+      this.selection_blocks.push ({
+        top:   i * lineHeight,
+        left:  left * charWidth,
+        width: (right - left) * charWidth
+      });
+    }
+  },
+
+  onSelectionChanged: function () {
+    this.computeLineBlocks ();
+    this.forceUpdate ();
+  },
+
+  componentWillMount: function () {
+    this.computeLineBlocks ();
+  },
+
+  componentDidMount: function () {
+    this.props.cursor.SelectionChanged.bindTo (this, this.onSelectionChanged);
+  },
+
+  componentWillUnmount: function () {
+    this.props.cursor.SelectionChanged.unbindFrom (this);
+  },
+
+  render: function () {
+    const blocks = this.selection_blocks.map (function (block, index) {
+      return <div key={index} className="selection-block" style={block}></div>;
+    });
+
+    return (
+      <div>
+        {blocks}
+      </div>
+    );
   }
 });
 
@@ -1113,11 +1530,22 @@ var EditorRenderCursorContainer = React.createClass ({
   },
 
   render: function () {
-    const cursors = this.props.cursors.map (function (cursor, index) {
-      return <EditorCursorRender key={index} cursor={cursor} />;
+    const selections = this.props.cursors.map (function (cursor, index) {
+      if (cursor.selection) {
+        return <EditorRenderCursorSelection key={index} cursor={cursor} />;
+      } else return null;
     });
 
-    return <div className="cursors">{cursors}</div>;
+    const cursors = this.props.cursors.map (function (cursor, index) {
+      return <EditorRenderCursor key={index} cursor={cursor} />;
+    });
+
+    return (
+      <div className="cursors">
+        {selections}
+        {cursors}
+      </div>
+    );
   }
 });
 
@@ -1129,10 +1557,6 @@ var EditorRenderLine = React.createClass ({
   },
 
   onContentChanged: function () {
-    this.forceUpdate ();
-  },
-
-  onSelectionChanged: function () {
     this.forceUpdate ();
   },
 
@@ -1149,13 +1573,11 @@ var EditorRenderLine = React.createClass ({
 
   componentDidMount: function () {
     this.props.line.ContentChanged.bindTo (this, this.onContentChanged);
-    this.props.line.SelectionChanged.bindTo (this, this.onSelectionChanged);
     this.props.line.store.ActiveLineChanged.bindTo (this, this.onActiveLineChanged);
   },
 
   componentWillUnmount: function () {
     this.props.line.ContentChanged.unbindFrom (this);
-    this.props.line.SelectionChanged.unbindFrom (this);
     this.props.line.store.ActiveLineChanged.unbindFrom (this);
   },
 
@@ -1172,15 +1594,8 @@ var EditorRenderLine = React.createClass ({
       "current-line": line.index === primary.line
     };
 
-    const charWidth  = line.store.charWidth;
-    const selections = Object.keys (line.selection).map (function (cursor_id) {
-      const selection = line.selection[cursor_id];
-      return <div key={cursor_id} className="selection" style={{ left: selection.start * charWidth, width: (selection.end - selection.start) * charWidth }}></div>;
-    });
-
     return (
       <div ref="line" className={EditorTools.joinClasses (classname)}>
-        {selections}
         {content}
       </div>
     );
@@ -1204,7 +1619,8 @@ var EditorRenderLines = React.createClass ({
     var location    = this.props.store.clientToIndices (left, top);
 
     this.props.store.cursors.removeSecondary ();
-    this.props.store.cursors.primary.setLocation (location);
+    this.props.store.cursors.primary.removeSelection ();
+    this.props.store.cursors.primary.setLocation (location, event.shiftKey);
   },
 
   onCharDimensionsChanged: function () {
