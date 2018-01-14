@@ -176,73 +176,6 @@ EditorRange.prototype.setEndLocation = function (location) {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
-var EditorStringBuilder = function (capacity) {
-  this.decoder          = new TextDecoder ("UTF-16LE");
-  this.capacity         = capacity | 0;
-  this.buffer           = new Uint16Array (this.capacity);
-  this.bufferLength     = 0;
-  this.completedStrings = null;
-};
-
-EditorStringBuilder.prototype.reset = function () {
-  this.completedStrings = null;
-  this.bufferLength     = 0;
-};
-
-EditorStringBuilder.prototype.build = function () {
-  if (this.completedStrings !== null) {
-    this.flushBuffer ();
-    return this.completedStrings.join ('');
-  } else {
-    return this.buildBuffer ();
-  }
-};
-
-EditorStringBuilder.prototype.buildBuffer = function () {
-  if (this.bufferLength === 0) {
-    return "";
-  }
-
-  const view = new Uint16Array (this.buffer.buffer, 0, this.bufferLength);
-  return this.decoder.decode (view);
-};
-
-EditorStringBuilder.prototype.flushBuffer = function () {
-  const buffer_string = this.buildBuffer ();
-  this.bufferLength = 0;
-
-  if (this.completedStrings === null) {
-    this.completedStrings = [buffer_string];
-  } else {
-    this.completedStrings[this.completedStrings.length] = buffer_string;
-    //this.completedStrings.push (buffer_string);
-  }
-};
-
-EditorStringBuilder.prototype.appendCode = function (char_code) {
-  const remaining = this.capacity - this.bufferLength;
-  if (remaining === 0) {
-    this.flushBuffer ();
-  }
-
-  this.buffer[this.bufferLength++] = char_code;
-};
-
-EditorStringBuilder.prototype.appendString = function (str) {
-  const str_len = str.length;
-
-  if (this.bufferLength + str_len >= this.capacity) {
-    this.flushBuffer ();
-    this.completedStrings.push (str);
-  } else {
-    for (var i = 0; i < str_len; i++) {
-      this.buffer[this.bufferLength++] = str.charCodeAt (i);
-    }
-  }
-}
-
-/* --------------------------------------------------------------------------------------------------------------------------- */
-
 var EditorLineMarker = function () {
 };
 
@@ -437,22 +370,22 @@ EditorLine.prototype.computeRender = function () {
     syntax.matchEOL ();
   }
 
-  var builder = new EditorStringBuilder (1024);
+  var builder = [];
   elements.forEach (function (element) {
-    builder.appendString ("<span");
+    builder.push ("<span");
 
     if (element.style) {
-      builder.appendString (" class=\"");
-      builder.appendString (element.style);
-      builder.appendCode (0x22); /* " */
+      builder.push (" class=\"");
+      builder.push (element.style);
+      builder.push ("\"");
     }
 
-    builder.appendCode (0x3e); /* > */
-    builder.appendString (element.chars);
-    builder.appendString ("</span>");
+    builder.push (">");
+    builder.push (element.chars);
+    builder.push ("</span>");
   });
 
-  this.render = builder.build ();
+  this.render = builder.join ('');
 
   if (syntax) {
     this.syntaxOut = syntax.state;
