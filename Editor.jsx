@@ -701,8 +701,23 @@ EditorCursor.prototype.deleteBackwards = function (count) {
   if (this.selection) {
     this.deleteSelected ();
   } else {
-    this.getLine ().deleteText (this.position.column - 1, 1);
-    this.moveLeft (count, false);
+    var line = this.getLine ();
+
+    if (this.position.column === 0) {
+      var prev = line.getPrevious ();
+
+      if (prev) {
+        var prev_original_len = prev.getLength ();
+
+        prev.appendText (line.content);
+        this.store.deleteLine (line.index);
+        //this.moveUp (1, false);
+        this.setLocation ({ line: prev.index, column: prev_original_len }, false);
+      }
+    } else {
+      line.deleteText (this.position.column - 1, 1);
+      this.moveLeft (count, false);
+    }
   }
 };
 
@@ -720,7 +735,7 @@ EditorCursor.prototype.deleteForwards = function (count) {
         this.store.deleteLine (next.index);
       }
     } else {
-      this.getLine ().deleteText (this.position.column, 1);
+      line.deleteText (this.position.column, 1);
     }
   }
 };
@@ -1392,6 +1407,34 @@ EditorStore.prototype.deserialize = function (obj) {
   if (this.lines.length === 0) {
     this.lines.push (new EditorLine (this, 0, ""));
   }
+};
+
+EditorStore.prototype.getText = function () {
+  return this.lines.map (function (line) {
+    return line.content;
+  }).join ('\n');
+};
+
+EditorStore.prototype.setText = function (text) {
+  /* Remove the secondary cursors and cancel any remaining selection */
+  this.cursors.removeSecondary ();
+  this.cursors.primary.removeSelection ();
+
+  /* Move the primary cursor to 0 position */
+  this.cursors.primary.setLocation ({ line: 0, column: 0 });
+
+  /* Create the new lines */
+  this.lines = obj.split (/[\r\n]/).map (function (line, index) {
+    return new EditorLine (this, index, line);
+  }.bind (this));
+
+  /* Make sure we have at least one line */
+  if (this.lines.length === 0) {
+    this.lines.push (new EditorLine (this, 0, ""));
+  }
+
+  /* Notify the UI that the lines have changed */
+  this.onLinesChanged ();
 };
 
 /* Renumerate the lines so their indices are correct */
