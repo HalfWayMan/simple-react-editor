@@ -20,18 +20,27 @@
     <script type="text/jsx">
       /** @jsx React.DOM */
       (function () {
-        var config  = { mountFocused: true };
-        var xhr     = new XMLHttpRequest ();
+        var load_own_source = window.location.hash !== "#empty";
 
-        xhr.open ("GET", document.getElementById ("editor_script").src);
-        xhr.onload = function () {
-          var store   = new EditorStore (config, xhr.responseText);
+        var config = { mountFocused: true };
+        function createEditor (content) {
+          var store   = new EditorStore (config, content);
           var factory = React.createFactory (Editor);
-          window.store = store;
           ReactDOM.render (factory ({ store: store }, null), document.getElementById ("container"));
-        };
+        }
 
-        xhr.send (null);
+        if (load_own_source) {
+          var xhr     = new XMLHttpRequest ();
+
+          xhr.open ("GET", document.getElementById ("editor_script").src);
+          xhr.onload = function () {
+            createEditor (xhr.responseText);
+          };
+
+          xhr.send (null);
+        } else {
+          createEditor ("");
+        }
       }) ();
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/0.14.0-alpha1/JSXTransformer.js"></script>

@@ -32,8 +32,8 @@ EditorEvent.prototype.unbindFrom = function (binding, cb) {
 };
 
 EditorEvent.prototype.fire = function () {
-  var args = Array.prototype.slice.call (arguments, [0]);
-  //console.debug ("firing event:", this.name);
+  const args = Array.prototype.slice.call (arguments, [0]);
+
   this.handlers.slice (0).forEach (function (handler) {
     try {
       handler.callback.apply (handler.binding, args);
@@ -73,6 +73,16 @@ EditorTools.joinClasses = function () {
   }
 
   return result.join (' ');
+};
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
+var EditorIdGenerator = function () {
+  var next_id = 0, func = function () {
+    return next_id++;
+  };
+
+  return func;
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
@@ -142,139 +152,8 @@ EditorRange.prototype.set = function (start_line, start_col, end_line, end_col) 
   }
 };
 
-EditorRange.isEmpty = function (range) {
-  return (range.start_line === range.end_line && range.start_column === range.end_column);
-};
-
-EditorRange.prototype.isEmpty = function () {
-  return EditorRange.isEmpty (this);
-};
-
 EditorRange.fromPosition = function (position) {
   return new EditorRange (position.line, position.column, position.line, position.column);
-};
-
-EditorRange.containsPosition = function (range, position) {
-  if (position.line < range.start_line || position.line > range.end_line) {
-    return false;
-  }
-
-  if (position.line === range.start_line && position.column < range.start_column) {
-    return false;
-  }
-
-  if (position.line === range.end_line && position.column > range.end_column) {
-    return false;
-  }
-
-  return true;
-}
-
-EditorRange.prototype.containsPosition = function (position) {
-  return EditorRange.containsPosition (position);
-};
-
-EditorRange.containsRange = function (range, other) {
-  if (other.start_line < range.start_line || other.end_line < range.start_line) {
-    return false;
-  }
-
-  if (other.start_line > range.end_line || other.end_line > range.end_line) {
-    return false;
-  }
-
-  if (other.start_line === range.start_line && other.start_column < range.start_column) {
-    return false;
-  }
-
-  if (other.end_line === range.end_line && other.end_column > range.end_column) {
-    return false;
-  }
-
-  return true;
-};
-
-EditorRange.prototype.containsRange = function (other) {
-  EditorRange.containsRange (this, other);
-};
-
-EditorRange.plusRange = function (a, b) {
-  var start_line, start_col, end_line, end_col;
-
-  if (b.start_line < a.start_line) {
-    start_line = b.start_line;
-    start_col = b.start_column;
-  } else if (b.start_line === b.start_line) {
-    start_line = b.start_line;
-    start_col = Math.min (a.start_column, b.start_column);
-  } else {
-    start_line = a.start_line;
-    start_col = a.start_column;
-  }
-
-  if (b.end_line > a.end_line) {
-    end_line = b.end_line;
-    end_col = b.end_column;
-  } else if (b.end_line === a.end_line) {
-    end_line = b.end_line;
-    end_col = Math.max (b.end_column, a.end_column);
-  } else {
-    end_line = a.end_line;
-    end_col = a.end_column;
-  }
-
-  return new EditorRange (start_line, start_col, end_line, end_col);
-};
-
-EditorRange.prototype.plusRange = function (other) {
-  return EditorRange.plusRange (this, range);
-};
-
-EditorRange.intersectRanges = function (a, b) {
-  var result_start_line = a.start_line;
-  var result_start_col = a.start_column;
-  var result_end_line = a.end_line;
-  var result_end_col = a.end_column;
-  var other_start_line = b.start_line;
-  var other_start_col = b.start_column;
-  var other_end_line = b.end_line;
-  var other_end_col = b.end_column;
-
-  if (result_start_line < other_start_line) {
-    result_start_line = other_start_line;
-    result_start_col = other_start_col;
-  } else if (result_start_line === other_start_line) {
-    result_start_column = Math.max (result_start_col, other_start_col);
-  }
-
-  if (result_end_line > other_end_line) {
-    result_end_line = other_end_line;
-    result_end_col = other_end_col;
-  } else if (result_end_line === other_end_Line) {
-    result_end_col = Math.min (result_end_col, other_end_col);
-  }
-
-  if (result_start_line > result_end_line) {
-    return null;
-  }
-
-  if (result_start_line === result_end_line && result_start_col > result_end_col) {
-    return null;
-  }
-
-  return new EditorRange (result_start_line, result_start_col, result_end_line, result_end_col);
-};
-
-EditorRange.prototype.intersectRange = function (other) {
-  return EditorRange.intersectRanges (this, other);
-};
-
-EditorRange.equalsRange = function (a, b) {
-  return !!a && !!b && a.start_line === b.start_line && a.start_column === b.start_column && a.end_line === b.end_line && a.end_column === b.end_column;
-};
-
-EditorRange.prototype.equalsRange = function (other) {
-  return EditorRange.equalsRange (this, other);
 };
 
 EditorRange.prototype.getStartLocation = function () {
@@ -295,64 +174,70 @@ EditorRange.prototype.setEndLocation = function (location) {
   this.end_column = location.column;
 };
 
-EditorRange.prototype.collapseToStart = function () {
-  return EditorRange.collapseToStart (this);
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
+var EditorStringBuilder = function (capacity) {
+  this.decoder          = new TextDecoder ("UTF-16LE");
+  this.capacity         = capacity | 0;
+  this.buffer           = new Uint16Array (this.capacity);
+  this.bufferLength     = 0;
+  this.completedStrings = null;
 };
 
-EditorRange.prototype.spansMultipleLines = function () {
-  return this.end_line > this.start_line;
+EditorStringBuilder.prototype.reset = function () {
+  this.completedStrings = null;
+  this.bufferLength     = 0;
 };
 
-EditorRange.prototype.collapseToStart = function () {
-  this.end_line   = this.start_line;
-  this.end_column = this.end_column;
-};
-
-EditorRange.fromLocations = function (start, end) {
-  return new EditorRange (start.line, start.column, end.line, end.column);
-};
-
-EditorRange.areIntersectingOrTouching = function (a, b) {
-  if (a.end_line < b.start_line || (a.end_line === b.start_line && a.end_column < b.start_column)) {
-    return false;
-  }
-
-  if (b.end_line < a.start_line || (b.end_line === a.start_line && b.end_column < a.start_column)) {
-    return false;
-  }
-
-  return true;
-};
-
-EditorRange.compareRangesUsingStarts = function (a, b) {
-  if (a.start_line === b.start_line) {
-    if (a.start_column === b.start_column) {
-      if (a.end_line === b.end_line) {
-        return a.end_column - b.end_column;
-      } else {
-        return a.end_line - b.end_line;
-      }
-    } else {
-      return a.start_column - b.start_column;
-    }
+EditorStringBuilder.prototype.build = function () {
+  if (this.completedStrings !== null) {
+    this.flushBuffer ();
+    return this.completedStrings.join ('');
   } else {
-    return b.start_line - a.start_line;
+    return this.buildBuffer ();
   }
 };
 
-EditorRange.compareRangesUsingEnds = function (a, b) {
-  if (a.end_line === b.end_line) {
-    if (a.end_column === b.end_column) {
-      if (a.start_line === b.start_line) {
-        return a.start_column - b.start_column;
-      } else {
-        return a.start_line - b.start_line;
-      }
-    } else {
-      return a.end_column - b.end_column;
-    }
+EditorStringBuilder.prototype.buildBuffer = function () {
+  if (this.bufferLength === 0) {
+    return "";
+  }
+
+  const view = new Uint16Array (this.buffer.buffer, 0, this.bufferLength);
+  return this.decoder.decode (view);
+};
+
+EditorStringBuilder.prototype.flushBuffer = function () {
+  const buffer_string = this.buildBuffer ();
+  this.bufferLength = 0;
+
+  if (this.completedStrings === null) {
+    this.completedStrings = [buffer_string];
   } else {
-    return a.end_line - b.end_line;
+    this.completedStrings[this.completedStrings.length] = buffer_string;
+    //this.completedStrings.push (buffer_string);
+  }
+};
+
+EditorStringBuilder.prototype.appendCode = function (char_code) {
+  const remaining = this.capacity - this.bufferLength;
+  if (remaining === 0) {
+    this.flushBuffer ();
+  }
+
+  this.buffer[this.bufferLength++] = char_code;
+};
+
+EditorStringBuilder.prototype.appendString = function (str) {
+  const str_len = str.length;
+
+  if (this.bufferLength + str_len >= this.capacity) {
+    this.flushBuffer ();
+    this.completedStrings.push (str);
+  } else {
+    for (var i = 0; i < str_len; i++) {
+      this.buffer[this.bufferLength++] = str.charCodeAt (i);
+    }
   }
 }
 
@@ -362,10 +247,15 @@ var EditorLineMarker = function () {
 };
 
 var EditorLine = function (store, index, content) {
+  this.id        = store.nextLineId ();
   this.store     = store;
   this.index     = index;
   this.content   = content;
   this.marker    = null;
+
+  this.syntaxIn  = 0;     /* syntax state entering line */
+  this.syntaxOut = 0;     /* syntax state exiting line */
+  this.syntax    = store.config.syntax === null ? null : new EditorSyntaxEngine (store.config.syntax);
   this.render    = [];
 
   this.ContentChanged   = new EditorEvent ("EditorLine.ContentChanged");
@@ -383,6 +273,10 @@ EditorLine.prototype.setContent = function (content) {
   }
 };
 
+EditorLine.prototype.getTextFrom = function (index) {
+  return this.content.slice (index);
+};
+
 EditorLine.prototype.insertText = function (index, text) {
   if (index === this.content.length) {
     this.setContent (this.content + text);
@@ -395,8 +289,20 @@ EditorLine.prototype.deleteText = function (index, count) {
   this.setContent (this.content.slice (0, index) + this.content.slice (index + count));
 };
 
+EditorLine.prototype.deleteTextFrom = function (index) {
+  this.setContent (this.content.slice (0, index));
+};
+
 EditorLine.prototype.getLength = function () {
   return this.content.length;
+};
+
+EditorLine.prototype.getPrevious = function () {
+  return this.store.lines[this.index - 1] || null;
+};
+
+EditorLine.prototype.getNext = function () {
+  return this.store.lines[this.index + 1] || null;
 };
 
 EditorLine.prototype.setMarker = function (marker) {
@@ -417,37 +323,69 @@ EditorLine.prototype.setActive = function () {
 };
 
 EditorLine.prototype.computeRender = function () {
+  var ESCAPED    = { '&': "&amp;", '<': "&lt;", '>': "&gt;" };
   var length     = this.content.length;
   var tab_size   = this.store.config.tabSize;
-  var syntax     = this.store.syntax;
+  var syntax     = this.syntax;
   var elements   = [];
-  var current    = { type: null, start: 0, end: -1, chars: "" };
+  var current    = { style: null, start: 0, end: -1, chars: "" };
   var last_index = 0;
+
+  if (syntax) {
+    var prev_line = this.getPrevious ();
+    if (prev_line) {
+      /* Our initial state is the state of our previous line's syntax engine at the end of rendering */
+      syntax.state = prev_line.syntaxOut;
+      this.syntaxIn = prev_line.syntaxOut;
+    } else {
+      /* We don't have a previous line, so start in state 0 */
+      syntax.state = 0;
+      this.syntaxIn = 0;
+    }
+  }
 
   function submit_current () {
     current.end = last_index;
     elements.push (current);
-    current = { type: null, start: last_index, end: -1, chars: "" };
+    current = { style: null, start: last_index, end: -1, chars: "" };
   }
 
-  function append_to_current (type, what) {
+  function append_to_current (style, escaped, what) {
     var chars;
 
     if (typeof what === "number") {
-      chars = String.fromCodePoint (what);
+      if (!escaped) {
+        if (what === 0x3c) {
+          chars = "&lt;";
+        } else if (what === 0x3e) {
+          chars = "&gt;";
+        } else if (what === 0x26) {
+          chars = "&amp;";
+        } else {
+          chars = String.fromCodePoint (what);
+        }
+      } else {
+        chars = String.fromCodePoint (what);
+      }
     } else if (typeof what === "string") {
-      chars = what;
+      if (escaped) {
+        chars = what;
+      } else {
+        chars = what.replace (/[&<>]/g, function (c) {
+          return ESCAPED[c];
+        });
+      }
     } else {
       throw new Error ("Expected either number (codepoint) or string; found " + typeof what);
     }
 
-    if (current.type === null) {
-      current.type = type;
+    if (current.style === null) {
+      current.style  = style;
       current.chars += chars;
-    } else if (current.type !== type) {
+    } else if (current.style !== style) {
       submit_current ();
 
-      current.type  = type;
+      current.style = style;
       current.chars = chars;
     } else {
       current.chars += chars;
@@ -462,23 +400,25 @@ EditorLine.prototype.computeRender = function () {
 
     if (code === 0x09) { /* tab */
       for (var i = 0; i < tab_size; i++) {
-        append_to_current ("whitespace", ' ');
+        append_to_current ("whitespace", true, '&nbsp;');
       }
 
       last_index++;
     } else if (code === 0x20) { /* space */
-      append_to_current ("whitespace", ' ');
+      append_to_current ("whitespace", true, '&nbsp;');
       last_index++;
     } else if (whitespaceRE.test (char)) {
-      append_to_current ("whitespace", char);
+      append_to_current ("whitespace", true, '&nbsp;');
       last_index++;
     } else {
-      var rule = syntax ? syntax.match (this.content, last_index) : null;
-      if (rule) {
-        append_to_current (rule.type, this.content.substring (last_index, last_index + rule.length));
-        last_index += rule.length;
+      var result = syntax ? syntax.match (this.content, last_index) : null;
+      if (result) {
+        /* We've matched a syntax rule and got back a descriptor with a style and match length */
+        append_to_current (result.style, false, this.content.substring (last_index, last_index + result.length));
+        last_index += result.length;
       } else {
-        append_to_current ("text", char);
+        /* We've not matched anything, so get the default style of our current syntax state */
+        append_to_current ((syntax ? syntax.getStateStyle () : null) || "plain", false, char);
         last_index++;
       }
     }
@@ -488,7 +428,37 @@ EditorLine.prototype.computeRender = function () {
     submit_current ();
   }
 
-  this.render = elements;
+  /* Pass the "end of line" into the syntax engine */
+  if (syntax) {
+    syntax.matchEOL ();
+  }
+
+  var builder = new EditorStringBuilder (1024);
+  elements.forEach (function (element) {
+    builder.appendString ("<span");
+
+    if (element.style) {
+      builder.appendString (" class=\"");
+      builder.appendString (element.style);
+      builder.appendCode (0x22); /* " */
+    }
+
+    builder.appendCode (0x3e); /* > */
+    builder.appendString (element.chars);
+    builder.appendString ("</span>");
+  });
+
+  this.render = builder.build ();
+
+  if (syntax) {
+    this.syntaxOut = syntax.state;
+
+    var next_line = this.getNext ();
+    if (next_line && next_line.syntaxIn !== syntax.state) {
+      next_line.computeRender ();
+      next_line.onContentChanged ();
+    }
+  }
 };
 
 EditorLine.prototype.onContentChanged = function () {
@@ -693,17 +663,51 @@ EditorCursor.prototype.moveEnd = function (extend_selection) {
 };
 
 EditorCursor.prototype.insertText = function (text) {
-  this.getLine ().insertText (this.position.column, text);
-  this.moveRight (text.length, false);
+  if (this.selection) {
+    /* replace selection */
+  } else {
+    this.getLine ().insertText (this.position.column, text);
+    this.moveRight (text.length, false);
+  }
+};
+
+EditorCursor.prototype.insertLine = function () {
+  if (this.selection) {
+    /* replace selection */
+  } else {
+    if (this.position.column === 0) {
+      /* Special case when at start of line: just insert empty line above */
+      this.store.insertLine (this.position.line, new EditorLine (this.store, 0, ""));
+      this.moveDown (1, false);
+    } else if (this.position.column === this.getLine ().getLength ()) {
+      /* Special case when at end of line: just insert empty line below */
+      this.store.insertLine (this.position.line + 1, new EditorLine (this.store, 0, ""));
+      this.moveDown (1, false);
+    } else {
+      const line   = this.getLine ();
+      const latter = line.getTextFrom (this.position.column);
+      line.deleteTextFrom (this.position.column);
+      this.store.insertLine (this.position.line + 1, new EditorLine (this.store, 0, latter));
+      this.setLocation ({ line: this.position.line + 1, column: 0 }, false);
+    }
+  }
 };
 
 EditorCursor.prototype.deleteBackwards = function (count) {
-  this.getLine ().deleteText (this.position.column - 1, 1);
-  this.moveLeft (count, false);
+  if (this.selection) {
+    this.deleteSelected ();
+  } else {
+    this.getLine ().deleteText (this.position.column - 1, 1);
+    this.moveLeft (count, false);
+  }
 };
 
 EditorCursor.prototype.deleteForwards = function (count) {
-  this.getLine ().deleteText (this.position.column, 1);
+  if (this.selection) {
+    this.deleteSelected ();
+  } else {
+    this.getLine ().deleteText (this.position.column, 1);
+  }
 };
 
 EditorCursor.prototype.extendSelection = function (prev_loc) {
@@ -746,8 +750,8 @@ EditorCursor.prototype.onSelectionChanged = function () {
 
 var EditorCursorCollection = function (store) {
   this.store     = store;
-  this.primary   = new EditorCursor (store, 0, true);
-  this.nextId    = 1;
+  this.nextId    = new EditorIdGenerator ();
+  this.primary   = new EditorCursor (store, this.nextId (), true);
   this.secondary = [];
   this.lastAdded = 0;
 
@@ -766,7 +770,7 @@ EditorCursorCollection.prototype.sortSecondary = function () {
 };
 
 EditorCursorCollection.prototype.addCursor = function (cursor) {
-  cursor.id = this.nextId++;
+  cursor.id = this.nextId ();
   this.secondary.push (cursor);
   this.sortSecondary ();
   this.lastAdded = this.secondary.length;
@@ -967,7 +971,7 @@ EditorKeymap.prototype.deserialize = function (map) {
 };
 
 EditorKeymap.prototype.onKeyEvent = function (mode, event) {
-  console.log (mode, event.key, event.shiftKey, event.ctrlKey, event.altKey, event.metaKey);
+  // console.log (mode, event.key, event.shiftKey, event.ctrlKey, event.altKey, event.metaKey);
   const store = this.store;
 
   if (this.mappingTable.hasOwnProperty (event.key)) {
@@ -1107,7 +1111,7 @@ EditorKeymap.defaultKeymap = [
 
    new EditorKeymap.Mapping ("down", function (event) {
      if (event.key.length === 1) {
-      return event.key.match (/(\w|\s|[-\[\]{}_=+;:'@#~,<.>\/\\?\!"£$%^&*()])/g);
+      return event.key.match (/(\w|\s|[-\|\[\]{}_=+;:'@#~,<.>\/\\?\!"£$%^&*()])/g);
      } else return false;
    }, null, false, false, false, function (store, event) {
      store.cursors.forEach (function (cursor) {
@@ -1117,7 +1121,7 @@ EditorKeymap.defaultKeymap = [
      return true;
    }),
 
-   new EditorKeymap.Mapping ("down", "Backspace", false, false, false, false, function (store, event) {
+   new EditorKeymap.Mapping ("down", "Backspace", null, false, false, false, function (store, event) {
      store.cursors.forEach (function (cursor) {
        cursor.deleteBackwards (1);
      });
@@ -1133,9 +1137,9 @@ EditorKeymap.defaultKeymap = [
      return true;
    }),
 
-   new EditorKeymap.Mapping ("down", "Enter", false, false, false, false, function (store, event) {
+   new EditorKeymap.Mapping ("down", "Enter", null, false, false, false, function (store, event) {
      store.cursors.forEach (function (cursor) {
-       cursor.newLine ();
+       cursor.insertLine ();
      });
 
      return true;
@@ -1148,32 +1152,169 @@ EditorKeymap.defaultKeymap = [
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
-var EditorSyntax = function (config) {
+var EditorSyntaxEngine = function (config) {
   this.config = config || {};
+  this.state  = 0;
+
+  Object.keys (this.config).forEach (function (state_name) {
+    if (this.config[state_name].import) {
+      this.config[state_name] = Object.assign ({}, this.config[state_name]);
+      var rules = this.config[state_name].rules = Object.assign ({}, this.config[state_name].rules);
+
+      this.config[state_name].import.forEach (function (impdec) {
+        if (!this.config.hasOwnProperty (impdec.state)) {
+          throw new Error ("Unknown state '" + impdec.state + "' in import declaration");
+        }
+
+        if (!this.config[impdec.state].rules.hasOwnProperty (impdec.name)) {
+          throw new Error ("Unknown rule '" + impdec.name + "' in state '" + impdec.state + "' in import declaration");
+        }
+
+        rules[impdec.name] = this.config[impdec.state].rules[impdec.name];
+      }.bind (this));
+    }
+  }.bind (this));
 };
 
-EditorSyntax.prototype.match = function (content, index) {
-  var match = index ? content.substring (index) : content;
+EditorSyntaxEngine.prototype.getStateStyle = function () {
+  return this.config[this.state].style;
+};
 
-  for (var key in this.config) {
-    var res = this.config[key].exec (match);
+EditorSyntaxEngine.prototype.match = function (content, index) {
+  var str   = index ? content.substring (index) : content;
+  var state = this.config[this.state];
+
+  for (var key in state.rules) {
+    const rule = state.rules[key];
+    const res  = rule.expr.exec (str);
+
     if (res) {
-      return { type: key, length: res[0].length };
+      /* If we have a 'goto' instruction, then set our new state */
+      if (typeof rule.goto === "number") {
+        this.state = rule.goto;
+      }
+
+      /* The style to apply is either the direct rule 'style' property or the 'style' property of our (possibly new) state */
+      return { style: rule.style || this.config[this.state].style || state.style, length: res[0].length };
     }
   }
 
   return null;
 };
 
-EditorSyntax.JavaScript = {
-  "comment":        /^(\/\/.*)|^(\/\*(\*(?!\/)|[^*])*\*\/)/,
-  "string_literal": /^["'][^"'\\]*(\\.[^"'\\]*)*["']/,
-  "reserved_word":  /^(var|function|new|this|typeof|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|while|do)[^\w]/,
-  "identifier":     /^[_a-z][a-zA-Z0-9_]*/,
-  "type_name":      /^[A-Z][a-zA-Z0-9_]*/,
-  "number":         /^(0[xX])?[0-9]+(\.[0-9]*)?/,
-  "regexp":         /^\/.*\//,
+EditorSyntaxEngine.prototype.matchEOL = function () {
+  var state = this.config[this.state];
+  if (state.hasOwnProperty ("$eol")) {
+    this.state = state["$eol"];
+  }
 };
+
+EditorSyntaxEngine.JavaScript = {
+  /* no state */
+  0: {
+    style: null,
+    rules: {
+      line_comment_start: {
+        expr:  /^\/\//,
+        goto:  1
+      },
+
+      block_comment_start: {
+        expr:  /^\/\*/,
+        goto:  2
+      },
+
+      string_literal_start: {
+        expr:  /^["]/,
+        goto:  3
+      },
+
+      char_literal_start: {
+        expr:  /^[']/,
+        goto:  4
+      },
+
+      reserved_word: {
+        expr:  /^(var|function|new|this|typeof|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|while|do|instanceof)\b/,
+        style: "reserved_word"
+      },
+
+      type_name: {
+        expr:  /^[A-Z][a-zA-Z0-9_]*/,
+        style: "type_name"
+      },
+
+      identifier: {
+        expr:  /^[_a-z][a-zA-Z0-9_]*/,
+        style: "identifier"
+      },
+
+      decimal: {
+        expr:  /^[0-9]+(\.[0-9]*)?/,
+        style: "number"
+      },
+
+      hexadecimal: {
+        expr:  /^0[xX][0-9a-fA-F]+/,
+        style: "number"
+      },
+
+      regexp: {
+        expr:  /^\/.*\/[gimuy]*/,
+        style: "regexp"
+      }
+    }
+  },
+
+  /* line comment */
+  1: {
+    style: "comment",
+    $eol:  0
+  },
+
+  /* block comment */
+  2: {
+    style: "comment",
+    rules: {
+      block_comment_end: {
+        expr:  /^\*\//,
+        style: "comment",
+        goto:  0
+      }
+    }
+  },
+
+  /* string literal */
+  3: {
+    style: "string_literal",
+    rules: {
+      string_literal_escape: {
+        expr:  /^\\([\\'"bfnrtv0]|(?:[1-7][0-7]{0,2}|[0-7]{2,3})|(?:x[a-fA-F0-9]{2})|(?:u[a-fA-F0-9]{4}))/,
+        style: "string_literal_escape"
+      },
+
+      string_literal_end: {
+        expr: /^["]/,
+        goto: 0
+      }
+    }
+  },
+
+  /* character literal */
+  4: {
+    style: "string_literal",
+    rules: {
+      char_literal_end: {
+        expr: /^[']/,
+        goto: 0
+      }
+    },
+
+    import: [
+      { state: 3, name: "string_literal_escape" },
+    ]
+  }
+}
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
@@ -1182,19 +1323,20 @@ var EditorStore = function (config, initial) {
   this.CursorChanged      = new EditorEvent ("EditorStore.CursorChanged");
   this.CursorAdded        = new EditorEvent ("EditorStore.CursorAdded");
   this.CursorRemoved      = new EditorEvent ("EditorStore.CursorRemoved");
+  this.LinesChanged       = new EditorEvent ("EditorStore.LinesChanged");
   this.LineHeightChanged  = new EditorEvent ("EditorStore.LineHeightChanged");
   this.CharWidthChanged   = new EditorEvent ("EditorStore.CharWidthChanged");
   this.LineContentChanged = new EditorEvent ("EditorStore.LineContentChanged");
   this.ActiveLineChanged  = new EditorEvent ("EditorStore.ActiveLineChanged");
 
   this.config     = Object.assign ({}, EditorStore.defaultConfig, config);
-  this.syntax     = new EditorSyntax (this.config.syntax);
   this.keymap     = new EditorKeymap (this, this.config.keymap);
   this.lines      = [];
   this.activeLine = 0;
   this.cursors    = new EditorCursorCollection (this);
   this.lineHeight = 0;
   this.charWidth  = 0;
+  this.nextLineId = new EditorIdGenerator ();
 
   this.deserialize (initial);
 };
@@ -1207,7 +1349,11 @@ EditorStore.defaultConfig = {
   mountFocused:       false,
   tabSize:            2,
   softTabs:           true,
-  syntax:             EditorSyntax.JavaScript
+  syntax:             EditorSyntaxEngine.JavaScript
+};
+
+EditorStore.prototype.getNextLineId = function () {
+  return this.nextLineId++;
 };
 
 EditorStore.prototype.deserialize = function (obj) {
@@ -1228,6 +1374,12 @@ EditorStore.prototype.renumerateLines = function () {
   this.lines.forEach (function (line, index) {
     line.index = index;
   });
+};
+
+EditorStore.prototype.insertLine = function (index, line) {
+  this.lines.splice (index, 0, line);
+  this.renumerateLines ();
+  this.onLinesChanged ();
 };
 
 /* Test if the given line index is a valid index */
@@ -1259,7 +1411,7 @@ EditorStore.prototype.getLeftOffsetChars = function () {
 
 EditorStore.prototype.setLineHeight = function (height) {
   if (this.lineHeight !== height) {
-    console.debug ("Line height set to", height);
+    // console.debug ("Line height set to", height);
     this.lineHeight = height;
     this.onLineHeightChanged ();
   }
@@ -1267,7 +1419,7 @@ EditorStore.prototype.setLineHeight = function (height) {
 
 EditorStore.prototype.setCharWidth = function (width) {
   if (this.charWidth != width) {
-    console.debug ("Character width set to", width);
+    // console.debug ("Character width set to", width);
     this.charWidth = width;
     this.onCharWidthChanged ();
   }
@@ -1310,6 +1462,10 @@ EditorStore.prototype.onCursorChanged = function (cursor) {
   }
 };
 
+EditorStore.prototype.onLinesChanged = function () {
+  this.LinesChanged.fire ();
+};
+
 EditorStore.prototype.onLineHeightChanged = function () {
   this.LineHeightChanged.fire ();
 };
@@ -1337,22 +1493,46 @@ var EditorRenderLineNumbers = React.createClass ({
     }
   },
 
+  onLinesChanged: function () {
+    if (this.props.store.config.lineNumbers) {
+      this.computeLineString ();
+    }
+
+    this.forceUpdate ();
+  },
+
+  computeLineString: function () {
+    var total   = this.props.store.lines.length + 1;
+    var builder = new Array (2 * total);
+
+    for (var i = 1, j = 0; i < total; i++, j += 2) {
+      builder[j + 0] = String (i);
+      builder[j + 1] = "<br />";
+    }
+
+    this.lineString = builder.join ('');
+  },
+
+  componentWillMount: function () {
+    if (this.props.store.config.lineNumbers) {
+      this.computeLineString ();
+    }
+  },
+
   componentDidMount: function () {
     this.props.store.Scroll.bindTo (this, this.onScroll);
+    this.props.store.LinesChanged.bindTo (this, this.onLinesChanged);
   },
 
   componentWillUnmount: function () {
     this.props.store.Scroll.unbindFrom (this);
+    this.props.store.LinesChanged.unbindFrom (this);
   },
 
   render: function () {
     if (this.props.store.config.lineNumbers) {
-      const width   = this.props.store.getLineNumberCharWidth ();
-      const numbers = this.props.store.lines.map (function (line, index) {
-        return <div key={index}>{1 + index}</div>;
-      });
-
-      return <div ref="lines" className="line-numbers" style={{ width: width + "em" }}>{numbers}</div>;
+      const width = this.props.store.getLineNumberCharWidth ();
+      return <div ref="lines" className="line-numbers" style={{ width: width + "em" }} dangerouslySetInnerHTML={{ __html: this.lineString }} />;
     } else {
       return null;
     }
@@ -1367,11 +1547,7 @@ var EditorRenderGutterMarker = React.createClass ({
   },
 
   render: function () {
-    if (this.props.marker) {
-      return <span>M</span>;
-    } else {
-      return null;
-    }
+    return <span>M</span>;
   }
 });
 
@@ -1386,19 +1562,29 @@ var EditorRenderGutter = React.createClass ({
     }
   },
 
+  onLinesChanged: function () {
+    this.forceUpdate ();
+  },
+
   componentDidMount: function () {
     this.props.store.Scroll.bindTo (this, this.onScroll);
+    this.props.store.LinesChanged.bindTo (this, this.onLinesChanged);
   },
 
   componentWillUnmount: function () {
     this.props.store.Scroll.unbindFrom (this);
+    this.props.store.LinesChanged.unbindFrom (this);
   },
 
   render: function () {
     if (this.props.store.config.gutter) {
       const width    = this.props.store.config.lineNumbers ? this.props.store.getLineNumberCharWidth () : 0;
       const elements = this.props.store.lines.map (function (line, index) {
-        return <div key={index}><EditorRenderGutterMarker marker={line.marker} /></div>;
+        if (line.marker) {
+          return <div key={index}><EditorRenderGutterMarker marker={line.marker} /></div>;
+        } else {
+          return null;
+        }
       });
 
       return <div ref="gutter" className="gutter" style={{ left: width + "em" }}>{elements}</div>;
@@ -1443,7 +1629,6 @@ var EditorRenderCursor = React.createClass ({
 
   render: function () {
     const cursor = this.props.cursor;
-    console.log ("cursor", cursor.position);
     const client = cursor.store.indicesToClient (cursor.position);
 
     /* Make sure the initial visibility of a cursor corresponds to all others */
@@ -1565,7 +1750,7 @@ var EditorRenderLine = React.createClass ({
 
     var element = this.refs.line;
     if (prev === this.props.line.index) {
-      element.className = element.className.replace (/\scurrent-line/, '');
+      element.className = element.className.replace (/\scurrent-line/g, '');
     } else if (next === this.props.line.index) {
       element.className += " current-line";
     }
@@ -1581,23 +1766,20 @@ var EditorRenderLine = React.createClass ({
     this.props.line.store.ActiveLineChanged.unbindFrom (this);
   },
 
-  renderElement: function (element, index) {
-    return <span key={index} className={element.type}>{element.chars}</span>;
-  },
-
   render: function () {
-    const line      = this.props.line;
-    const primary   = line.store.cursors.primary;
-    const content   = line.render.map (this.renderElement);
-    const classname = {
+    const line       = this.props.line;
+    const lineHeight = line.store.lineHeight;
+    const primary    = line.store.cursors.primary;
+    const className  = {
       "line":         true,
       "current-line": line.index === primary.line
     };
 
     return (
-      <div ref="line" className={EditorTools.joinClasses (classname)}>
-        {content}
-      </div>
+      <div ref="line"
+           className={EditorTools.joinClasses (className)}
+           style={{ top: line.index * lineHeight }}
+           dangerouslySetInnerHTML={{ __html: line.render }} />
     );
   }
 });
@@ -1627,18 +1809,24 @@ var EditorRenderLines = React.createClass ({
     this.forceUpdate ();
   },
 
+  onLinesChanged: function () {
+    this.forceUpdate ();
+  },
+
   componentDidMount: function () {
     this.props.store.CharWidthChanged.bindTo (this, this.onCharDimensionsChanged);
+    this.props.store.LinesChanged.bindTo (this, this.onLinesChanged);
   },
 
   componentWillUnmount: function () {
     this.props.store.CharWidthChanged.unbindFrom (this);
+    this.props.store.LinesChanged.unbindFrom (this);
   },
 
   render: function () {
     const left_offset = this.props.store.getLeftOffsetChars ();
     const lines       = this.props.store.lines.map (function (line, index) {
-      return <EditorRenderLine key={index} line={line} />;
+      return <EditorRenderLine key={line.id} line={line} />;
     });
 
     return (

@@ -39,11 +39,13 @@ div.editor {
     background-color: #1e1e1e;
     overflow-y: hidden;
     .fixed-mixin();
+    color: #adadad;
+    text-align: right;
 
-    div {
-      color: #adadad;
-      text-align: right;
-    }
+    // div {
+    //   color: #adadad;
+    //   text-align: right;
+    // }
   }
 
   div.gutter {
@@ -73,7 +75,9 @@ div.editor {
     overflow-x: hidden;
 
     div.line {
-      position: relative;
+      //position: relative;
+      position: absolute;
+      width: 100%;
       color: #d4d4c8;
       height: @editor-line-height * @editor-font-size;
       white-space: pre;
@@ -122,6 +126,10 @@ div.editor {
 
         &.string_literal {
           color: #b28d6c;
+        }
+
+        &.string_literal_escape {
+          color: #beb87e;
         }
 
         &.number {
