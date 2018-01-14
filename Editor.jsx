@@ -277,6 +277,10 @@ EditorLine.prototype.getTextFrom = function (index) {
   return this.content.slice (index);
 };
 
+EditorLine.prototype.appendText = function (text) {
+  this.setContent (this.content + text);
+};
+
 EditorLine.prototype.insertText = function (index, text) {
   if (index === this.content.length) {
     this.setContent (this.content + text);
@@ -706,7 +710,18 @@ EditorCursor.prototype.deleteForwards = function (count) {
   if (this.selection) {
     this.deleteSelected ();
   } else {
-    this.getLine ().deleteText (this.position.column, 1);
+    var line = this.getLine ();
+
+    if (this.position.column === line.getLength ()) {
+      var next = line.getNext ();
+
+      if (next) {
+        line.appendText (next.content);
+        this.store.deleteLine (next.index);
+      }
+    } else {
+      this.getLine ().deleteText (this.position.column, 1);
+    }
   }
 };
 
@@ -1388,6 +1403,12 @@ EditorStore.prototype.renumerateLines = function () {
 
 EditorStore.prototype.insertLine = function (index, line) {
   this.lines.splice (index, 0, line);
+  this.renumerateLines ();
+  this.onLinesChanged ();
+};
+
+EditorStore.prototype.deleteLine = function (index) {
+  this.lines.splice (index, 1);
   this.renumerateLines ();
   this.onLinesChanged ();
 };
