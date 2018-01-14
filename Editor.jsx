@@ -118,7 +118,7 @@ EditorPosition.prototype.isBefore = function (other) {
 
 EditorPosition.prototype.isBeforeOrEqual = function (other) {
   if (this.line < other.line) {
-    return false;
+    return true;
   }
 
   if (this.line > other.line) {
@@ -821,13 +821,23 @@ EditorCursorCollection.prototype.getAll = function () {
 EditorCursorCollection.prototype.getCursorOnLowestLine = function () {
   if (this.secondary.length === 0) {
     return this.primary;
-  } else return this.secondary[0];
+  } else {
+    var secondary = this.secondary[0];
+    if (this.primary.position.isBefore (secondary.position)) {
+      return this.primary;
+    } else return secondary;
+  }
 };
 
 EditorCursorCollection.prototype.getCursorOnHighestLine = function () {
   if (this.secondary.length === 0) {
     return this.primary;
-  } else return this.secondary[this.secondary.length - 1];
+  } else {
+    var secondary = this.secondary[this.secondary.length - 1];
+    if (!this.primary.position.isBeforeOrEqual (secondary.position)) {
+      return this.primary;
+    } else return secondary;
+  }
 };
 
 EditorCursorCollection.prototype.forEach = function (action) {
