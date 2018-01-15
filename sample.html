@@ -22,10 +22,15 @@
       (function () {
         var load_own_source = window.location.hash !== "#empty";
 
-        var config = { mountFocused: true };
+        var store   = null;
+        var config  = { mountFocused: true };
+        var factory = React.createFactory (Editor);
         function createEditor (content) {
-          var store   = new EditorStore (config, content);
-          var factory = React.createFactory (Editor);
+          if (store !== null) {
+            throw new Error ("Store has already been created!");
+          }
+
+          store = new EditorStore (config, content);
           ReactDOM.render (factory ({ store: store }, null), document.getElementById ("container"));
         }
 
@@ -34,7 +39,9 @@
 
           xhr.open ("GET", document.getElementById ("editor_script").src);
           xhr.onload = function () {
-            createEditor (xhr.responseText);
+            if (xhr.readyState == 4) {
+              createEditor (xhr.responseText);
+            }
           };
 
           xhr.send (null);

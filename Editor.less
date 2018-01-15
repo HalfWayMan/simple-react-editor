@@ -41,11 +41,6 @@ div.editor {
     .fixed-mixin();
     color: #adadad;
     text-align: right;
-
-    // div {
-    //   color: #adadad;
-    //   text-align: right;
-    // }
   }
 
   div.gutter {
@@ -75,7 +70,6 @@ div.editor {
     overflow-x: hidden;
 
     div.line {
-      //position: relative;
       position: absolute;
       width: 100%;
       color: #d4d4c8;
@@ -155,6 +149,15 @@ div.editor {
 
     &.secondary {
       background-color: #aaa;
+    }
+  }
+
+  div.encapsulator-marker {
+    position: absolute;
+    border: 1px solid #aaa;
+
+    &.matching {
+      border-color: #888;
     }
   }
 

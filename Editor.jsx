@@ -179,21 +179,59 @@ EditorRange.prototype.setEndLocation = function (location) {
 var EditorLineMarker = function () {
 };
 
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
+var EditorEncapsulators = function (content) {
+  this.opens  = { '[': [], '{': [], '(': [] };
+  this.closes = { ']': [], '}': [], ')': [] };
+  this.update (content);
+};
+
+EditorEncapsulators.isEncapsulator = function (char) {
+  return char === '[' || char === ']' || char === '(' || char === ')' || char === '{' || char === '}';
+};
+
+EditorEncapsulators.prototype.reset = function () {
+  this.opens['['] = [];
+  this.opens['('] = [];
+  this.opens['{'] = [];
+  this.closes[']'] = [];
+  this.closes[')'] = [];
+  this.closes['}'] = [];
+}
+
+EditorEncapsulators.prototype.update = function (content) {
+  this.reset ();
+
+  for (var i = 0; i < content.length; i++) {
+    var char = content[i];
+
+    if (char === '(' || char === '{' || char === '[') {
+      this.opens[char] = i;
+    } else if (char === ')' || char === '}' || char === ']') {
+      this.closes[char] = i;
+    }
+  }
+};
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
 var EditorLine = function (store, index, content) {
-  this.id        = store.nextLineId ();
-  this.store     = store;
-  this.index     = index;
-  this.content   = content;
-  this.marker    = null;
+  this.id            = store.nextLineId ();
+  this.store         = store;
+  this.index         = index;
+  this.content       = content;
+  this.marker        = null;
+  this.encapsulators = null;
 
-  this.syntaxIn  = 0;     /* syntax state entering line */
-  this.syntaxOut = 0;     /* syntax state exiting line */
-  this.syntax    = store.config.syntax === null ? null : new EditorSyntaxEngine (store.config.syntax);
-  this.render    = [];
+  this.syntaxIn      = 0;     /* syntax state entering line */
+  this.syntaxOut     = 0;     /* syntax state exiting line */
+  this.syntax        = store.config.syntax === null ? null : new EditorSyntaxEngine (store.config.syntax);
+  this.render        = [];
 
-  this.ContentChanged   = new EditorEvent ("EditorLine.ContentChanged");
-  this.MarkerChanged    = new EditorEvent ("EditorLine.MarkerChanged");
-  this.Clicked          = new EditorEvent ("EditorLine.Clicked");
+  this.ContentChanged = new EditorEvent ("EditorLine.ContentChanged");
+  this.MarkerChanged  = new EditorEvent ("EditorLine.MarkerChanged");
+  this.Clicked        = new EditorEvent ("EditorLine.Clicked");
 
   this.computeRender ();
 };
@@ -201,6 +239,7 @@ var EditorLine = function (store, index, content) {
 EditorLine.prototype.setContent = function (content) {
   if (content !== this.content) {
     this.content = content;
+    this.updateEncapsulators ();
     this.computeRender ();
     this.onContentChanged ();
   }
@@ -396,6 +435,64 @@ EditorLine.prototype.computeRender = function () {
       next_line.onContentChanged ();
     }
   }
+};
+
+EditorLine.prototype.updateEncapsulators = function () {
+  if (this.encapsulators === null) {
+    this.encapsulators = new EditorEncapsulators (this.content);
+  } else this.encapsulators.update (this.content);
+};
+
+EditorLine.prototype.isEncapsulatorAt = function (column) {
+  return EditorEncapsulators.isEncapsulator (this.content[column]);
+};
+
+EditorLine.prototype.getPreviousEncapsulator = function (start_col) {
+  var line  = this;
+  var count = 0;
+
+  while (line !== null) {
+    for (var i = start_col; i >= 0; i--) {
+      var char = line.content[i];
+      if (char === '{' || char === '(' || char === '[') {
+        count--;
+        if (!count) {
+          return new EditorPosition (line.index, i);
+        }
+      } else if (char === '}' || char === ')' || char === ']') {
+        count++;
+      }
+    }
+
+    line      = line.getPrevious ();
+    start_col = line.getLength () - 1;
+  }
+
+  return null;
+};
+
+EditorLine.prototype.getNextEncapsulator = function (start_col) {
+  var line  = this;
+  var count = 0;
+
+  while (line !== null) {
+    for (var i = start_col; i < line.content.length; i++) {
+      var char = line.content[i];
+      if (char === '}' || char === ')' || char === ']') {
+        count--;
+        if (!count) {
+          return new EditorPosition (line.index, i);
+        }
+      } else if (char === '{' || char === '(' || char === '[') {
+        count++;
+      }
+    }
+
+    line      = line.getNext ();
+    start_col = 0;
+  }
+
+  return null;
 };
 
 EditorLine.prototype.onContentChanged = function () {
@@ -686,6 +783,45 @@ EditorCursor.prototype.removeSelection = function () {
   if (this.selection) {
     this.selection = null;
     this.onChanged ();
+  }
+};
+
+EditorCursor.prototype.isNextToEncapsulator = function () {
+  return this.getLine ().isEncapsulatorAt (this.position.column) || this.getLine ().isEncapsulatorAt (this.position.column - 1);
+};
+
+EditorCursor.prototype.getEncapsulatorOffset = function () {
+  var line = this.getLine ();
+
+  if (line.isEncapsulatorAt (this.position.column)) {
+    return 0;
+  } else if (line.isEncapsulatorAt (this.position.column - 1)) {
+    return -1;
+  } else {
+    return null;
+  }
+};
+
+EditorCursor.prototype.getMatchingEncapsulator = function () {
+  var line = this.getLine ();
+
+  var encapsulator, encapsulator_column;
+  if (line.isEncapsulatorAt (this.position.column)) {
+    encapsulator_column = this.position.column;
+    encapsulator = line.content[encapsulator_column];
+  } else if (line.isEncapsulatorAt (this.position.column - 1)) {
+    encapsulator_column = this.position.column - 1;
+    encapsulator = line.content[encapsulator_column];
+  } else {
+    return null;
+  }
+
+  if (encapsulator === '{' || encapsulator === '(' || encapsulator === '[') {
+    return line.getNextEncapsulator (encapsulator_column);
+  } else if (encapsulator === '}' || encapsulator === ')' || encapsulator === ']') {
+    return line.getPreviousEncapsulator (encapsulator_column);
+  } else {
+    return null;
   }
 };
 
@@ -1635,12 +1771,16 @@ var EditorRenderCursor = React.createClass ({
   },
 
   render: function () {
-    const cursor = this.props.cursor;
-    const client = cursor.store.indicesToClient (cursor.position);
+    const cursor  = this.props.cursor;
+    const client  = cursor.store.indicesToClient (cursor.position);
+    var   classes = {
+      "cursor":       true,
+      "secondary":    !cursor.primary
+    }
 
     /* Make sure the initial visibility of a cursor corresponds to all others */
     client.visibility = cursor.store.cursors.blinkIndex ? "visible" : "hidden";
-    return <div ref="cursor" className={EditorTools.joinClasses ("cursor", cursor.primary ? "" : "secondary")} style={client} />;
+    return <div ref="cursor" className={EditorTools.joinClasses (classes)} style={client} />;
   }
 });
 
@@ -1722,20 +1862,41 @@ var EditorRenderCursorContainer = React.createClass ({
   },
 
   render: function () {
+    const store      = this.props.cursors.store;
     const selections = this.props.cursors.map (function (cursor, index) {
       if (cursor.selection) {
         return <EditorRenderCursorSelection key={index} cursor={cursor} />;
       } else return null;
     });
 
-    const cursors = this.props.cursors.map (function (cursor, index) {
+    const cursors = this.props.cursors.map (function (cursor, index){
       return <EditorRenderCursor key={index} cursor={cursor} />;
+    });
+
+    const encapsulator_style = { width: store.charWidth, height: store.lineHeight };
+    const encapsulators = this.props.cursors.map (function (cursor, index) {
+      var offset = cursor.getEncapsulatorOffset ();
+
+      if (offset !== null) {
+        var style = Object.assign ({}, encapsulator_style, { marginLeft: (offset * store.charWidth) }, store.indicesToClient (cursor.position));
+        return <div key={index} className="encapsulator-marker" style={style} />;
+      } else return null;
+    });
+
+    const alt_encapsulators = this.props.cursors.map (function (cursor, index) {
+      var matching = cursor.getMatchingEncapsulator ();
+      if (matching !== null) {
+        var style = Object.assign ({}, encapsulator_style, store.indicesToClient (matching));
+        return <div key={'alt_' + index} className="encapsulator-marker matching" style={style} />;
+      } else return null;
     });
 
     return (
       <div className="cursors">
         {selections}
         {cursors}
+        {encapsulators}
+        {alt_encapsulators}
       </div>
     );
   }
