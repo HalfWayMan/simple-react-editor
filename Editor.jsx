@@ -235,6 +235,23 @@ EditorLine.prototype.deleteTextFrom = function (index) {
   this.setContent (this.content.slice (0, index));
 };
 
+EditorLine.prototype.contains = function (what) {
+  if (typeof what === "string") {
+    return this.content.indexOf (what) !== -1;
+  } else if (what instanceof RegExp) {
+    return what.exec (this.content) !== null;
+  }
+};
+
+EditorLine.prototype.containsInRange = function (what, start, end) {
+  var in_range = this.content.substr (start, end - start);
+  if (typeof what === "string") {
+    return in_range.indexOf (what) !== -1;
+  } else if (what instanceof RegExp) {
+    return what.exec (in_range) !== null;
+  }
+};
+
 EditorLine.prototype.getLength = function () {
   return this.content.length;
 };
@@ -671,13 +688,25 @@ EditorCursor.prototype.insertText = function (text) {
   }
 };
 
+EditorCursor.prototype.insertTab = function () {
+  var line   = this.getLine ();
+  var prev   = line.getPrevious ();
+  var indent = prev ? prev.indent : 0;
+
+  if (indent && this.position.column < indent && line.containsInRange (/^\s*$/, 0, this.position.column)) {
+    this.insertText (new Array (indent + 1).join (' '));
+  } else {
+    var tab_offset = this.position.column % this.store.config.tabSize;
+    this.insertText (new Array (1 + (this.store.config.tabSize - tab_offset)).join (' '));
+  }
+};
+
 EditorCursor.prototype.insertLine = function () {
   if (this.selection) {
     /* replace selection */
   } else {
     var current_indent = this.getLine ().indent;
     var indent         = new Array (current_indent + 1).join (' ');
-    console.log ("current_indent", current_indent);
 
     if (this.position.column === 0) {
       /* Special case when at start of line: just insert empty line above */
@@ -1238,6 +1267,10 @@ EditorKeymap.defaultKeymap = [
    }),
 
    new EditorKeymap.Mapping ("down", "Tab", false, false, false, false, function (store, event) {
+     store.cursors.forEach (function (cursor) {
+       cursor.insertTab ();
+     });
+
      return true;
    }),
 ];
