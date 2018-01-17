@@ -1092,7 +1092,6 @@ EditorKeymap.prototype.deserialize = function (map) {
 };
 
 EditorKeymap.prototype.onKeyEvent = function (mode, event) {
-  // console.log (mode, event.key, event.shiftKey, event.ctrlKey, event.altKey, event.metaKey);
   const store = this.store;
 
   if (this.mappingTable.hasOwnProperty (event.key)) {
@@ -1626,7 +1625,6 @@ EditorStore.prototype.getLeftOffsetChars = function () {
 
 EditorStore.prototype.setLineHeight = function (height) {
   if (this.lineHeight !== height) {
-    // console.debug ("Line height set to", height);
     this.lineHeight = height;
     this.onLineHeightChanged ();
   }
@@ -1634,7 +1632,6 @@ EditorStore.prototype.setLineHeight = function (height) {
 
 EditorStore.prototype.setCharWidth = function (width) {
   if (this.charWidth != width) {
-    // console.debug ("Character width set to", width);
     this.charWidth = width;
     this.onCharWidthChanged ();
   }
@@ -1723,12 +1720,6 @@ var EditorRenderLineNumbers = React.createClass ({
     store: React.PropTypes.instanceOf (EditorStore).isRequired
   },
 
-  onScroll: function (scrollTop) {
-    if (this.refs.hasOwnProperty ("lines") && this.refs.lines.scrollTop !== scrollTop) {
-      //this.refs.lines.scrollTop = scrollTop;
-    }
-  },
-
   onLinesChanged: function () {
     if (this.props.store.config.lineNumbers) {
       this.computeLineString ();
@@ -1756,7 +1747,6 @@ var EditorRenderLineNumbers = React.createClass ({
   },
 
   componentDidMount: function () {
-    this.props.store.Scroll.bindTo (this, this.onScroll);
     this.props.store.LinesChanged.bindTo (this, this.onLinesChanged);
   },
 
