@@ -75,6 +75,20 @@ EditorTools.joinClasses = function () {
   return result.join (' ');
 };
 
+EditorTools.listen = function (target, eventType, callback) {
+  if (target.addEventListener) {
+    target.addEventListener (eventType, callback, false);
+    return function () {
+      target.removeEventListener (eventType, callback, false);
+    };
+  } else if (target.attachEvent) {
+    target.attachEvent ("on" + eventType, callback);
+    return function () {
+      target.removeEvent ("on" + eventType, callback);
+    };
+  }
+};
+
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
 var EditorIdGenerator = function () {
@@ -2369,8 +2383,6 @@ EditorMinimap.getCharIndex = function (charCode) {
 
 EditorMinimap.prototype.getBuffer = function () {
   if (this.buffer === null) {
-    this.width  = this.canvas.clientWidth;
-    this.height = this.canvas.clientHeight;
     if (this.width === 0 || this.height === 0) {
       return null;
     }
@@ -2409,13 +2421,16 @@ EditorMinimap.prototype.updateLayout = function () {
   const end_line    = store.getScrollBottomLine ();
   const line_count  = end_line - start_line + 1;
 
+  this.width  = this.canvas.clientWidth;
+  this.height = this.canvas.clientHeight;
+
   this.sliderHeight = Math.floor (line_count * EditorMinimap.CHAR_HEIGHT);
   this.sliderMaxTop = Math.max (0, store.lines.length * EditorMinimap.CHAR_HEIGHT - this.sliderHeight);
   this.sliderMaxTop = Math.min (this.height - this.sliderHeight, this.sliderMaxTop);
   this.SliderChanged.fire ();
 
-  const slider_ratio = this.sliderMaxTop / (line_height * store.lines.length - store.viewHeight);
-  this.sliderTop = store.scrollTop * slider_ratio;
+  this.sliderRatio = this.sliderMaxTop / (line_height * store.lines.length - store.viewHeight);
+  this.sliderTop  = store.scrollTop * this.sliderRatio;
 
   if (max_lines >= store.lines.length) {
     this.lineStart = 0;
@@ -2541,6 +2556,37 @@ var EditorRenderMinimapSlider = React.createClass ({
     minimap: React.PropTypes.instanceOf (EditorMinimap).isRequired
   },
 
+  getInitialState: function () {
+    return { dragging: false, start: 0, startTop: 0 };
+  },
+
+  onSliderMouseDown: function (event) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    this.setState ({ dragging: true, start: event.clientY, startTop: this.props.minimap.sliderTop }, function () {
+      this.removeMouseMove = EditorTools.listen (document, "mousemove", this.onMouseMove);
+      this.removeMouseUp   = EditorTools.listen (document, "mouseup", this.onMouseUp);
+    }.bind (this));
+  },
+
+  onMouseMove: function (event) {
+    const minimap = this.props.minimap;
+    const delta   = event.clientY - this.state.start;
+    const desired = Math.min (minimap.sliderMaxTop, Math.max (0, this.state.startTop + delta));
+
+    minimap.store.onScroll (Math.round (desired / minimap.sliderRatio));
+  },
+
+  onMouseUp: function () {
+    this.removeMouseMove ();
+    this.removeMouseMove = null;
+
+    this.removeMouseUp ();
+    this.removeMouseUp = null;
+  },
+
   onSliderChanged: function () {
     this.forceUpdate ();
   },
@@ -2555,7 +2601,11 @@ var EditorRenderMinimapSlider = React.createClass ({
 
   render: function () {
     const minimap = this.props.minimap;
-    return <div className="slider" style={{ top: minimap.sliderTop, height: minimap.sliderHeight }} />;
+    return (
+      <div className={"slider" + (this.state.dragging ? " active" : "")}
+           style={{ top: minimap.sliderTop, height: minimap.sliderHeight }}
+           onMouseDown={this.onSliderMouseDown} />
+    );
   }
 });
 

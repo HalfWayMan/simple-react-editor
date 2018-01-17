@@ -190,10 +190,12 @@ div.editor {
     background-color: #1e1e1e;
     border-left: 1px solid black;
     box-shadow: -1px 0px 10px 0px rgba(0,0,0,0.6);
+    .noselect();
 
     canvas {
       width: 100%;
       height: 100%;
+      .noselect();
     }
 
     div.slider {
@@ -209,7 +211,7 @@ div.editor {
       background-color: #888;
       transition: opacity 100ms linear;
 
-      &:hover {
+      &:hover, &.active {
         opacity: 0.6 !important;
       }
     }
