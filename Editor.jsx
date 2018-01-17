@@ -357,6 +357,7 @@ EditorLine.prototype.computeRender = function () {
   }
 
   var whitespaceRE = /\s/;
+  var in_indent    = true;
 
   while (last_index < length) {
     var char = this.content[last_index];
@@ -1442,6 +1443,64 @@ EditorSyntaxEngine.JavaScript = {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+var EditorIndentRanges = function (store) {
+  this.store  = store;
+  this.ranges = [];
+
+  this.Changed = new EditorEvent ("EditorIndentRanges.Changed");
+  this.update ();
+};
+
+EditorIndentRanges.prototype.update = function () {
+  var store       = this.store;
+  var ranges      = [];
+  var prev_indent = 0;
+
+  this.store.lines.forEach (function (line) {
+    if (line.indent > 0) {
+      var index = line.indent / store.config.tabSize;
+
+      for (var column = 0; column < index; column++) {
+        if (column > ranges.length - 1) {
+          ranges.push ([{ start: line.index, end: line.index }]);
+        } else {
+          var blocks = ranges[column];
+          var block  = blocks[blocks.length - 1];
+
+          if (block.end === line.index - 1) {
+            /* Previous line was indented at this column; extend the block */
+            block.end = line.index;
+          } else {
+            /* Previous line was not indented at this column; create a new block */
+            blocks.push ({ start: line.index, end: line.index });
+          }
+        }
+      }
+
+      prev_indent = line.indent;
+    } else if (line.content.length === 0 || line.contains (/^\s*$/)) {
+      for (var column = 0; column < ranges.length; column++) {
+        var blocks = ranges[column];
+        var block  = blocks[blocks.length - 1];
+
+        if (block.end === line.index - 1) {
+          block.end = line.index;
+        }
+      }
+    } else {
+      prev_indent = 0;
+    }
+  });
+
+  this.ranges = ranges;
+};
+
+EditorIndentRanges.prototype.onChanged = function () {
+  this.Changed.fire ();
+};
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
 var EditorStore = function (config, initial) {
   this.Scroll             = new EditorEvent ("EditorStore.Scroll");
   this.CursorChanged      = new EditorEvent ("EditorStore.CursorChanged");
@@ -1453,15 +1512,16 @@ var EditorStore = function (config, initial) {
   this.LineContentChanged = new EditorEvent ("EditorStore.LineContentChanged");
   this.ActiveLineChanged  = new EditorEvent ("EditorStore.ActiveLineChanged");
 
-  this.config     = Object.assign ({}, EditorStore.defaultConfig, config);
-  this.keymap     = new EditorKeymap (this, this.config.keymap);
-  this.lines      = [];
-  this.activeLine = 0;
-  this.cursors    = new EditorCursorCollection (this);
-  this.lineHeight = 0;
-  this.charWidth  = 0;
-  this.scrollTop  = 0;
-  this.nextLineId = new EditorIdGenerator ();
+  this.config       = Object.assign ({}, EditorStore.defaultConfig, config);
+  this.keymap       = new EditorKeymap (this, this.config.keymap);
+  this.lines        = [];
+  this.activeLine   = 0;
+  this.cursors      = new EditorCursorCollection (this);
+  this.lineHeight   = 0;
+  this.charWidth    = 0;
+  this.scrollTop    = 0;
+  this.nextLineId   = new EditorIdGenerator ();
+  this.indentRanges = new EditorIndentRanges (this);
 
   this.deserialize (initial);
 };
@@ -1492,6 +1552,8 @@ EditorStore.prototype.deserialize = function (obj) {
   if (this.lines.length === 0) {
     this.lines.push (new EditorLine (this, 0, ""));
   }
+
+  this.indentRanges.update ();
 };
 
 EditorStore.prototype.getText = function () {
@@ -1642,6 +1704,7 @@ EditorStore.prototype.onCursorChanged = function (cursor) {
 
 EditorStore.prototype.onLinesChanged = function () {
   this.LinesChanged.fire ();
+  this.indentRanges.update ();
 };
 
 EditorStore.prototype.onLineHeightChanged = function () {
@@ -1654,6 +1717,7 @@ EditorStore.prototype.onCharWidthChanged = function () {
 
 EditorStore.prototype.onLineContentChanged = function (line) {
   this.LineContentChanged.fire (line);
+  this.indentRanges.update ();
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
@@ -1987,6 +2051,74 @@ var EditorRenderLine = React.createClass ({
   }
 });
 
+var EditorRenderLineIndent = React.createClass ({
+  propTypes: {
+    line: React.PropTypes.instanceOf (EditorLine).isRequired
+  },
+
+  render: function () {
+    const line     = this.props.line;
+    const store    = line.store;
+    const tab_size = store.config.tabSize;
+    const indent   = line.indent;
+
+    if (indent >= tab_size) {
+      const total = indent / tab_size;
+      var   steps = [];
+
+      for (var i = 0; i < total; i++) {
+        steps.push (<span key={i} style={{ left: (i * tab_size * store.charWidth), width: store.charWidth * tab_size }} />);
+      }
+
+      return <div className="indent-guide" style={{ top: line.index * store.lineHeight }}>{steps}</div>;
+    } else {
+      return null;
+    }
+  }
+});
+
+var EditorRenderRanges = React.createClass ({
+  propTypes: {
+    ranges: React.PropTypes.instanceOf (EditorIndentRanges).isRequired
+  },
+
+  onRangesChanged: function () {
+    this.forceUpdate ();
+  },
+
+  onDimensionsChanged: function () {
+    this.forceUpdate ();
+  },
+
+  componentDidMount: function () {
+    this.props.ranges.Changed.bindTo (this, this.onRangesChanged);
+    this.props.ranges.store.CharWidthChanged.bindTo (this, this.onDimensionsChanged);
+    this.props.ranges.store.LineHeightChanged.bindTo (this, this.onDimensionsChanged);
+  },
+
+  componentWillUnmount: function () {
+    this.props.ranges.Changed.unbindFrom (this);
+    this.props.ranges.store.CharWidthChanged.unbindFrom (this);
+    this.props.ranges.store.LineHeightChanged.unbindFrom (this);
+  },
+
+  render: function () {
+    const store    = this.props.ranges.store;
+    const tab_size = store.config.tabSize;
+    const ranges   = this.props.ranges.ranges;
+    const columns  = ranges.map (function (range, column) {
+      const left   = column * tab_size * store.charWidth;
+      const blocks = range.map (function (block, index) {
+        return <div key={index} style={{ left: left, top: block.start * store.lineHeight, height: (1 + (block.end - block.start)) * store.lineHeight }}/>;
+      });
+
+      return <div key={column}>{blocks}</div>;
+    });
+
+    return <div className="indent-indicator-ranges">{columns}</div>;
+  }
+});
+
 var EditorRenderLines = React.createClass ({
   propTypes: {
     store: React.PropTypes.instanceOf (EditorStore).isRequired
@@ -2040,12 +2172,17 @@ var EditorRenderLines = React.createClass ({
       return <EditorRenderLine key={line.id} line={line} />;
     });
 
+    // const indent_guides = this.props.store.lines.map (function (line, index) {
+    //   return <EditorRenderLineIndent key={line.id} line={line} />;
+    // });
+
     return (
       <div ref="lines" className="lines"
            style={{ left: left_offset + "em" }}
            onScroll={this.onViewScroll}
            onClick={this.onViewClick}>
         {lines}
+        <EditorRenderRanges ranges={this.props.store.indentRanges} />
         <EditorRenderCursorContainer cursors={this.props.store.cursors} />
       </div>
     );
