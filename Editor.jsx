@@ -1452,9 +1452,8 @@ var EditorIndentRanges = function (store) {
 };
 
 EditorIndentRanges.prototype.update = function () {
-  var store       = this.store;
-  var ranges      = [];
-  var prev_indent = 0;
+  var store  = this.store;
+  var ranges = [];
 
   this.store.lines.forEach (function (line) {
     if (line.indent > 0) {
@@ -1476,19 +1475,14 @@ EditorIndentRanges.prototype.update = function () {
           }
         }
       }
-
-      prev_indent = line.indent;
     } else if (line.content.length === 0 || line.contains (/^\s*$/)) {
-      for (var column = 0; column < ranges.length; column++) {
-        var blocks = ranges[column];
-        var block  = blocks[blocks.length - 1];
-
-        if (block.end === line.index - 1) {
-          block.end = line.index;
+      /* Extend all blocks from previous line through this blank line */
+      ranges.forEach (function (blocks) {
+        var last_block = blocks[blocks.length - 1];
+        if (last_block.end === line.index - 1) {
+          last_block.end = line.index;
         }
-      }
-    } else {
-      prev_indent = 0;
+      });
     }
   });
 
