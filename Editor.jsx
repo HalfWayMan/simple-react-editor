@@ -1380,20 +1380,37 @@ var EditorSyntaxEngine = function (config) {
   this.state  = 0;
 
   Object.keys (this.config).forEach (function (state_name) {
+    if (this.config[state_name].rules) {
+      this.config[state_name].ruleMap = this.config[state_name].rules.reduce (function (acc, rule) {
+        return acc[rule.name] = rule, acc;
+      }, {});
+    } else {
+      this.config[state_name].rules   = [];
+      this.config[state_name].ruleMap = {};
+    }
+
     if (this.config[state_name].import) {
+      /* Duplicate the configuration for this state so we don't modify the original schema */
       this.config[state_name] = Object.assign ({}, this.config[state_name]);
-      var rules = this.config[state_name].rules = Object.assign ({}, this.config[state_name].rules);
+
+      /* Duplicate the array of rules for this state as well */
+      var rules   = this.config[state_name].rules = this.config[state_name].rules.slice (0);
+      var ruleMap = this.config[state_name].ruleMap;
 
       this.config[state_name].import.forEach (function (impdec) {
         if (!this.config.hasOwnProperty (impdec.state)) {
           throw new Error ("Unknown state '" + impdec.state + "' in import declaration");
         }
 
-        if (!this.config[impdec.state].rules.hasOwnProperty (impdec.name)) {
+        if (!this.config[impdec.state].ruleMap.hasOwnProperty (impdec.name)) {
           throw new Error ("Unknown rule '" + impdec.name + "' in state '" + impdec.state + "' in import declaration");
         }
 
-        rules[impdec.name] = this.config[impdec.state].rules[impdec.name];
+        console.log
+        var found = this.config[impdec.state].ruleMap[impdec.name];
+        ruleMap[impdec.name] = found;
+        rules.push (found);
+
       }.bind (this));
     }
   }.bind (this));
@@ -1407,8 +1424,8 @@ EditorSyntaxEngine.prototype.match = function (content, index) {
   var str   = index ? content.substring (index) : content;
   var state = this.config[this.state];
 
-  for (var key in state.rules) {
-    const rule = state.rules[key];
+  for (var i = 0; i < state.rules.length; i++) {
+    const rule = state.rules[i];
     const res  = rule.expr.exec (str);
 
     if (res) {
@@ -1418,7 +1435,7 @@ EditorSyntaxEngine.prototype.match = function (content, index) {
       }
 
       /* The style to apply is either the direct rule 'style' property or the 'style' property of our (possibly new) state */
-      return { style: rule.style || this.config[this.state].style || state.style, length: res[0].length };
+      return { style: rule.style || this.config[this.state].style || state.style, rule: rule, length: res[0].length };
     }
   }
 
@@ -1436,57 +1453,67 @@ EditorSyntaxEngine.JavaScript = {
   /* no state */
   0: {
     style: null,
-    rules: {
-      line_comment_start: {
+    rules: [
+      {
+        name:  "line_comment_start",
         expr:  /^\/\//,
         goto:  1
       },
 
-      block_comment_start: {
+      {
+        name:  "block_comment_start",
         expr:  /^\/\*/,
         goto:  2
       },
 
-      string_literal_start: {
+      {
+        name:  "string_literal_start",
         expr:  /^["]/,
         goto:  3
       },
 
-      char_literal_start: {
+      {
+        name:  "char_literal_start",
         expr:  /^[']/,
         goto:  4
       },
 
-      reserved_word: {
+      {
+        name:  "reserved_word",
         expr:  /^(var|function|new|this|typeof|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|while|do|instanceof|const)\b/,
         style: "reserved_word"
       },
 
-      type_name: {
+      {
+        name:  "type_name",
         expr:  /^[A-Z][a-zA-Z0-9_]*/,
         style: "type_name"
       },
 
-      identifier: {
+      {
+        name:  "identifier",
         expr:  /^[_a-z][a-zA-Z0-9_]*/,
         style: "identifier"
       },
 
-      decimal: {
+      {
+        name:  "hexadecimal",
+        expr:  /^0[xX][0-9a-fA-F]*/,
+        style: "number"
+      },
+
+      {
+        name:  "decimal",
         expr:  /^[0-9]+(\.[0-9]*)?/,
         style: "number"
       },
 
-      hexadecimal: {
-        expr:  /^0[xX][0-9a-fA-F]+/,
-        style: "number"
-      },
-
-      regexp: {
+      {
+        name:  "regexp",
         expr:  /^\/.*\/[gimuy]*/,
         style: "regexp"
       }
-    }
+    ]
   },
 
   /* line comment */
@@ -1498,46 +1525,50 @@ EditorSyntaxEngine.JavaScript = {
   /* block comment */
   2: {
     style: "comment",
-    rules: {
-      block_comment_end: {
+    rules: [
+      {
+        name:  "block_comment_end",
         expr:  /^\*\//,
         style: "comment",
         goto:  0
       }
-    }
+    ]
   },
 
   /* string literal */
   3: {
     style: "string_literal",
-    rules: {
-      string_literal_escape: {
+    rules: [
+      {
+        name:  "string_literal_escape",
         expr:  /^\\([\\'"bfnrtv0]|(?:[1-7][0-7]{0,2}|[0-7]{2,3})|(?:x[a-fA-F0-9]{2})|(?:u[a-fA-F0-9]{4}))/,
         style: "string_literal_escape"
       },
 
-      string_literal_end: {
+      {
+        name: "string_literal_end",
         expr: /^["]/,
         goto: 0
       }
-    }
+    ]
   },
 
   /* character literal */
   4: {
     style: "string_literal",
-    rules: {
-      char_literal_end: {
+    rules: [
+      {
+        name: "char_literal_end",
         expr: /^[']/,
         goto: 0
       }
-    },
+    ],
 
     import: [
       { state: 3, name: "string_literal_escape" },
     ]
   }
-}
+};
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
@@ -2254,16 +2285,22 @@ var EditorRenderLines = React.createClass ({
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
 var EditorMinimap = function (store, canvas) {
-  this.store     = store;
-  this.canvas    = canvas;
-  this.width     = canvas.clientWidth;
-  this.height    = canvas.clientHeight;
-  this.context   = canvas.getContext ("2d");
-  this.buffer    = null;
-  this.lineStart = 0;
-  this.lineEnd   = 0;
+  this.store        = store;
+  this.canvas       = canvas;
+  this.width        = canvas.clientWidth;
+  this.height       = canvas.clientHeight;
+  this.context      = canvas.getContext ("2d");
+  this.buffer       = null;
+  this.lineStart    = 0;
+  this.lineEnd      = 0;
+  this.sliderHeight = 0;
+  this.sliderMaxTop = 0;
+  this.sliderTop    = 0;
+
+  this.SliderChanged = new EditorEvent ("EditorMinimap.SliderChanged");
 
   this.store.LinesChanged.bindTo (this, this.onLinesChanged);
+  this.store.Scroll.bindTo (this, this.onScroll);
 };
 
 EditorMinimap.MIN_CHAR      = 32;
@@ -2364,6 +2401,31 @@ EditorMinimap.prototype.clearBuffer = function () {
   }
 };
 
+EditorMinimap.prototype.updateLayout = function () {
+  const store       = this.store;
+  const max_lines   = Math.floor (this.canvas.clientHeight / EditorMinimap.CHAR_HEIGHT);
+  const line_height = store.lineHeight;
+  const start_line  = store.getScrollTopLine ();
+  const end_line    = store.getScrollBottomLine ();
+  const line_count  = end_line - start_line + 1;
+
+  this.sliderHeight = Math.floor (line_count * EditorMinimap.CHAR_HEIGHT);
+  this.sliderMaxTop = Math.max (0, store.lines.length * EditorMinimap.CHAR_HEIGHT - this.sliderHeight);
+  this.sliderMaxTop = Math.min (this.height - this.sliderHeight, this.sliderMaxTop);
+  this.SliderChanged.fire ();
+
+  const slider_ratio = this.sliderMaxTop / (line_height * store.lines.length - store.viewHeight);
+  this.sliderTop = store.scrollTop * slider_ratio;
+
+  if (max_lines >= store.lines.length) {
+    this.lineStart = 0;
+    this.lineEnd   = store.lines.length - 1;
+  } else {
+    this.lineStart = Math.max (0, Math.floor (start_line - this.sliderTop / EditorMinimap.CHAR_HEIGHT));
+    this.lineEnd   = Math.min (store.lines.length - 1, this.lineStart + max_lines - 1);
+  }
+};
+
 EditorMinimap.renderChar = function (charData, buffer, x, y, charCode, background, color) {
   const dest        = buffer.data;
   var   dest_offset = 4 * (y * buffer.width + x);
@@ -2433,7 +2495,7 @@ EditorMinimap.renderChar = function (charData, buffer, x, y, charCode, backgroun
   dest_offset += 4 * buffer.width;
 };
 
-EditorMinimap.prototype.updateLayout = function () {
+EditorMinimap.prototype.render = function () {
   const store      = this.store;
   const theme      = store.editorTheme;
   const charData   = EditorMinimap.BrighterCharacterData;
@@ -2445,17 +2507,15 @@ EditorMinimap.prototype.updateLayout = function () {
   }
 
   this.clearBuffer ();
-  this.lineStart = 0;
-  this.lineEnd   = store.lines.length;
 
-  for (var i = this.lineStart; i < this.lineEnd; i++) {
+  for (var y = 0, i = this.lineStart; i < this.lineEnd; i++, y += 4) {
     var x = 0, line = store.lines[i];
 
     line.elements.forEach (function (element) {
       if (x < width && element.style !== null && element.style !== "whitespace") {
         const color = theme[element.style];
         for (var j = 0; j < element.chars.length && x < width; j++, x += 2) {
-          EditorMinimap.renderChar (charData, buffer, x, i * 4, element.chars.charCodeAt (j), theme.background, color);
+          EditorMinimap.renderChar (charData, buffer, x, y, element.chars.charCodeAt (j), theme.background, color);
         }
       } else {
         x += 2 * element.length;
@@ -2468,7 +2528,36 @@ EditorMinimap.prototype.updateLayout = function () {
 
 EditorMinimap.prototype.onLinesChanged = function () {
   this.updateLayout ();
+  this.render ();
 };
+
+EditorMinimap.prototype.onScroll = function () {
+  this.updateLayout ();
+  this.render ();
+};
+
+var EditorRenderMinimapSlider = React.createClass ({
+  propTypes: {
+    minimap: React.PropTypes.instanceOf (EditorMinimap).isRequired
+  },
+
+  onSliderChanged: function () {
+    this.forceUpdate ();
+  },
+
+  componentDidMount: function () {
+    this.props.minimap.SliderChanged.bindTo (this, this.onSliderChanged);
+  },
+
+  componentWillUnmount: function () {
+    this.props.minimap.SliderChanged.unbindFrom (this);
+  },
+
+  render: function () {
+    const minimap = this.props.minimap;
+    return <div className="slider" style={{ top: minimap.sliderTop, height: minimap.sliderHeight }} />;
+  }
+});
 
 var EditorRenderMinimap = React.createClass ({
   propTypes: {
@@ -2482,12 +2571,14 @@ var EditorRenderMinimap = React.createClass ({
   onDimensionsChanged: function () {
     this.forceUpdate (function () {
       this.minimap.updateLayout ();
+      this.minimap.render ();
     }.bind (this));
   },
 
   onThemeChanged: function () {
     this.forceUpdate (function () {
       this.minimap.updateLayout ();
+      this.minimap.render ();
     }.bind (this));
   },
 
@@ -2515,7 +2606,7 @@ var EditorRenderMinimap = React.createClass ({
     return (
       <div ref="minimap" className="minimap" style={style}>
         <canvas ref="canvas" />
-        <div className="slider" />
+        {this.minimap ? <EditorRenderMinimapSlider minimap={this.minimap} /> : null}
       </div>
     );
   }
