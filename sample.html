@@ -30,7 +30,7 @@
             throw new Error ("Store has already been created!");
           }
 
-          store = new EditorStore (config, content);
+          window.store = store = new EditorStore (config, content);
           ReactDOM.render (factory ({ store: store }, null), document.getElementById ("container"));
         }
 

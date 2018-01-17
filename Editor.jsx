@@ -828,11 +828,13 @@ EditorCursor.prototype.getMatchingEncapsulator = function () {
 /* Fire the 'LineChanged' with the two arguments (last line and new line) */
 EditorCursor.prototype.onLineChanged = function (last_line, line) {
   this.LineChanged.fire (last_line, line);
+  this.store.onCursorChanged (this);
 };
 
 /* Fire the 'ColumnChanged' with the two arguments (last column and new column) */
 EditorCursor.prototype.onColumnChanged = function (last_column, column) {
   this.ColumnChanged.fire (last_column, column);
+  this.store.onCursorChanged (this);
 };
 
 /* Fire the 'Changed' event (with no parameters) and then call 'onCursorChanged' in the EditorStore */
@@ -1445,6 +1447,7 @@ var EditorStore = function (config, initial) {
   this.cursors    = new EditorCursorCollection (this);
   this.lineHeight = 0;
   this.charWidth  = 0;
+  this.scrollTop  = 0;
   this.nextLineId = new EditorIdGenerator ();
 
   this.deserialize (initial);
@@ -1568,6 +1571,10 @@ EditorStore.prototype.setCharWidth = function (width) {
   }
 };
 
+EditorStore.prototype.setViewHeight = function (height) {
+  this.viewHeight = height;
+};
+
 EditorStore.prototype.clientToIndices = function (left, top) {
   return {
     line:   Math.floor (top / this.lineHeight),
@@ -1588,7 +1595,16 @@ EditorStore.prototype.setCursorLocation = function (location) {
   this.cursors.primary.setLocation (location);
 };
 
+EditorStore.prototype.getScrollTopLine = function () {
+  return Math.min (this.lines.length - 1, Math.max (0, Math.ceil (this.scrollTop / this.lineHeight)));
+};
+
+EditorStore.prototype.getScrollBottomLine = function () {
+  return this.getScrollTopLine () + Math.floor (this.viewHeight / this.lineHeight);
+};
+
 EditorStore.prototype.onScroll = function (scrollTop) {
+  this.scrollTop = scrollTop;
   this.Scroll.fire (scrollTop);
 };
 
@@ -1601,6 +1617,12 @@ EditorStore.prototype.onCursorChanged = function (cursor) {
       var prev = this.activeLine;
       this.activeLine = cursor.position.line;
       this.ActiveLineChanged.fire (prev, cursor.position.line);
+    }
+
+    if (cursor.position.line <= this.getScrollTopLine ()) {
+      this.onScroll (cursor.position.line * this.lineHeight);
+    } else if (cursor.position.line >= this.getScrollBottomLine ()) {
+      this.onScroll ((cursor.position.line + 1) * this.lineHeight - this.viewHeight);
     }
   }
 };
@@ -1631,7 +1653,7 @@ var EditorRenderLineNumbers = React.createClass ({
   },
 
   onScroll: function (scrollTop) {
-    if (this.refs.hasOwnProperty ("lines")) {
+    if (this.refs.hasOwnProperty ("lines") && this.refs.lines.scrollTop !== scrollTop) {
       this.refs.lines.scrollTop = scrollTop;
     }
   },
@@ -1957,11 +1979,11 @@ var EditorRenderLines = React.createClass ({
     store: React.PropTypes.instanceOf (EditorStore).isRequired
   },
 
-  onScroll: function (event) {
+  onViewScroll: function (event) {
     this.props.store.onScroll (this.refs.lines.scrollTop);
   },
 
-  onClick: function (event) {
+  onViewClick: function (event) {
     var lines       = this.refs.lines;
     var client_rect = lines.getBoundingClientRect ();
     var top         = (event.clientY - client_rect.top) + lines.scrollTop;
@@ -1981,14 +2003,22 @@ var EditorRenderLines = React.createClass ({
     this.forceUpdate ();
   },
 
+  onScroll: function (scrollTop) {
+    if (this.refs.lines.scrollTop !== scrollTop) {
+      this.refs.lines.scrollTop = scrollTop;
+    }
+  },
+
   componentDidMount: function () {
     this.props.store.CharWidthChanged.bindTo (this, this.onCharDimensionsChanged);
     this.props.store.LinesChanged.bindTo (this, this.onLinesChanged);
+    this.props.store.Scroll.bindTo (this, this.onScroll);
   },
 
   componentWillUnmount: function () {
     this.props.store.CharWidthChanged.unbindFrom (this);
     this.props.store.LinesChanged.unbindFrom (this);
+    this.props.store.Scroll.unbindFrom (this);
   },
 
   render: function () {
@@ -2000,8 +2030,8 @@ var EditorRenderLines = React.createClass ({
     return (
       <div ref="lines" className="lines"
            style={{ left: left_offset + "em" }}
-           onScroll={this.onScroll}
-           onClick={this.onClick}>
+           onScroll={this.onViewScroll}
+           onClick={this.onViewClick}>
         {lines}
         <EditorRenderCursorContainer cursors={this.props.store.cursors} />
       </div>
@@ -2051,8 +2081,14 @@ var Editor = React.createClass ({
     this.props.store.setCharWidth (guide.getBoundingClientRect ().width / 2);
   },
 
+  updateFromViewHeight: function () {
+    const container = this.refs.container;
+    this.props.store.setViewHeight (container.clientHeight);
+  },
+
   componentDidMount: function () {
     this.updateFromCharGuide ();
+    this.updateFromViewHeight ();
     if (this.props.store.config.mountFocused) {
       window.setTimeout (function () {
         this.refs.container.focus ();
