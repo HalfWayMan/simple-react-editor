@@ -2045,33 +2045,7 @@ var EditorRenderLine = React.createClass ({
   }
 });
 
-var EditorRenderLineIndent = React.createClass ({
-  propTypes: {
-    line: React.PropTypes.instanceOf (EditorLine).isRequired
-  },
-
-  render: function () {
-    const line     = this.props.line;
-    const store    = line.store;
-    const tab_size = store.config.tabSize;
-    const indent   = line.indent;
-
-    if (indent >= tab_size) {
-      const total = indent / tab_size;
-      var   steps = [];
-
-      for (var i = 0; i < total; i++) {
-        steps.push (<span key={i} style={{ left: (i * tab_size * store.charWidth), width: store.charWidth * tab_size }} />);
-      }
-
-      return <div className="indent-guide" style={{ top: line.index * store.lineHeight }}>{steps}</div>;
-    } else {
-      return null;
-    }
-  }
-});
-
-var EditorRenderRanges = React.createClass ({
+var EditorRenderIndentRanges = React.createClass ({
   propTypes: {
     ranges: React.PropTypes.instanceOf (EditorIndentRanges).isRequired
   },
@@ -2166,17 +2140,13 @@ var EditorRenderLines = React.createClass ({
       return <EditorRenderLine key={line.id} line={line} />;
     });
 
-    // const indent_guides = this.props.store.lines.map (function (line, index) {
-    //   return <EditorRenderLineIndent key={line.id} line={line} />;
-    // });
-
     return (
       <div ref="lines" className="lines"
            style={{ left: left_offset + "em" }}
            onScroll={this.onViewScroll}
            onClick={this.onViewClick}>
         {lines}
-        <EditorRenderRanges ranges={this.props.store.indentRanges} />
+        <EditorRenderIndentRanges ranges={this.props.store.indentRanges} />
         <EditorRenderCursorContainer cursors={this.props.store.cursors} />
       </div>
     );
