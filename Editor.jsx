@@ -751,7 +751,6 @@ EditorCursor.prototype.deleteBackwards = function (count) {
 
         prev.appendText (line.content);
         this.store.deleteLine (line.index);
-        //this.moveUp (1, false);
         this.setLocation ({ line: prev.index, column: prev_original_len }, false);
       }
     } else {
@@ -1360,7 +1359,7 @@ EditorSyntaxEngine.JavaScript = {
       },
 
       reserved_word: {
-        expr:  /^(var|function|new|this|typeof|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|while|do|instanceof)\b/,
+        expr:  /^(var|function|new|this|typeof|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|while|do|instanceof|const)\b/,
         style: "reserved_word"
       },
 
