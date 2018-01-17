@@ -22,6 +22,7 @@ div.editor {
   height: 100%;
   border: 1px solid #eee;
   line-height: @editor-line-height;
+  overflow-y: auto;
 
   div.editor-char-guide {
     position: absolute;
@@ -34,7 +35,7 @@ div.editor {
     position: absolute;
     top: 0;
     left: 0;
-    height: 100%;
+    //height: 100%;
     min-width: 1em;
     background-color: #1e1e1e;
     overflow-y: hidden;
@@ -48,7 +49,7 @@ div.editor {
     position: absolute;
     top: 0;
     left: 0;
-    height: 100%;
+    //height: 100%;
     width: 1em;
     background-color: #1e1e1e;
     overflow-y: hidden;
@@ -65,11 +66,11 @@ div.editor {
     top: 0;
     left: 0;
     right: 0;
-    height: 100%;
+    //height: 100%;
     background-color: #1e1e1e;
     cursor: text;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto;
+    //overflow-y: hidden;
 
     div.line {
       position: absolute;

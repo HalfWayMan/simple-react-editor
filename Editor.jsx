@@ -1665,7 +1665,7 @@ EditorStore.prototype.setCursorLocation = function (location) {
 };
 
 EditorStore.prototype.getScrollTopLine = function () {
-  return Math.min (this.lines.length - 1, Math.max (0, Math.ceil (this.scrollTop / this.lineHeight)));
+  return Math.min (this.lines.length - 1, Math.max (0, Math.floor (this.scrollTop / this.lineHeight)));
 };
 
 EditorStore.prototype.getScrollBottomLine = function () {
@@ -1688,7 +1688,7 @@ EditorStore.prototype.onCursorChanged = function (cursor) {
       this.ActiveLineChanged.fire (prev, cursor.position.line);
     }
 
-    if (cursor.position.line <= this.getScrollTopLine ()) {
+    if (cursor.position.line < this.getScrollTopLine ()) {
       this.onScroll (cursor.position.line * this.lineHeight);
     } else if (cursor.position.line >= this.getScrollBottomLine ()) {
       this.onScroll ((cursor.position.line + 1) * this.lineHeight - this.viewHeight);
@@ -1725,7 +1725,7 @@ var EditorRenderLineNumbers = React.createClass ({
 
   onScroll: function (scrollTop) {
     if (this.refs.hasOwnProperty ("lines") && this.refs.lines.scrollTop !== scrollTop) {
-      this.refs.lines.scrollTop = scrollTop;
+      //this.refs.lines.scrollTop = scrollTop;
     }
   },
 
@@ -1792,30 +1792,32 @@ var EditorRenderGutter = React.createClass ({
     store: React.PropTypes.instanceOf (EditorStore).isRequired
   },
 
-  onScroll: function (scrollTop) {
-    if (this.refs.hasOwnProperty ("gutter")) {
-      this.refs.gutter.scrollTop = scrollTop;
-    }
-  },
-
   onLinesChanged: function () {
     this.forceUpdate ();
   },
 
+  onDimensionsChanged: function () {
+    this.forceUpdate ();
+  },
+
   componentDidMount: function () {
-    this.props.store.Scroll.bindTo (this, this.onScroll);
     this.props.store.LinesChanged.bindTo (this, this.onLinesChanged);
+    this.props.store.LineHeightChanged.bindTo (this, this.onDimensionsChanged);
+    this.props.store.CharWidthChanged.bindTo (this, this.onDimensionsChanged);
   },
 
   componentWillUnmount: function () {
-    this.props.store.Scroll.unbindFrom (this);
     this.props.store.LinesChanged.unbindFrom (this);
+    this.props.store.LineHeightChanged.unbindFrom (this);
+    this.props.store.CharWidthChanged.unbindFrom (this);
   },
 
   render: function () {
-    if (this.props.store.config.gutter) {
-      const width    = this.props.store.config.lineNumbers ? this.props.store.getLineNumberCharWidth () : 0;
-      const elements = this.props.store.lines.map (function (line, index) {
+    const store = this.props.store;
+
+    if (store.config.gutter) {
+      const width    = store.config.lineNumbers ? store.getLineNumberCharWidth () : 0;
+      const elements = store.lines.map (function (line, index) {
         if (line.marker) {
           return <div key={index}><EditorRenderGutterMarker marker={line.marker} /></div>;
         } else {
@@ -1823,7 +1825,7 @@ var EditorRenderGutter = React.createClass ({
         }
       });
 
-      return <div ref="gutter" className="gutter" style={{ left: width + "em" }}>{elements}</div>;
+      return <div ref="gutter" className="gutter" style={{ left: width + "em", height: store.lines.length * store.lineHeight }}>{elements}</div>;
     } else {
       return null;
     }
@@ -2071,12 +2073,15 @@ var EditorRenderIndentRanges = React.createClass ({
   },
 
   render: function () {
-    const store    = this.props.ranges.store;
-    const tab_size = store.config.tabSize;
-    const ranges   = this.props.ranges.ranges;
-    const columns  = ranges.map (function (range, column) {
-      const left   = column * tab_size * store.charWidth;
-      const blocks = range.map (function (block, index) {
+    const store     = this.props.ranges.store;
+    const tab_size  = store.config.tabSize;
+    const ranges    = this.props.ranges.ranges;
+    const last_line = store.getScrollBottomLine ();
+    const columns   = ranges.map (function (range, column) {
+      const left    = column * tab_size * store.charWidth;
+      const blocks  = range.filter (function (block) {
+        return block.start <= last_line;
+      }).map (function (block, index) {
         return <div key={index} style={{ left: left, top: block.start * store.lineHeight, height: (1 + (block.end - block.start)) * store.lineHeight }}/>;
       });
 
@@ -2090,10 +2095,6 @@ var EditorRenderIndentRanges = React.createClass ({
 var EditorRenderLines = React.createClass ({
   propTypes: {
     store: React.PropTypes.instanceOf (EditorStore).isRequired
-  },
-
-  onViewScroll: function (event) {
-    this.props.store.onScroll (this.refs.lines.scrollTop);
   },
 
   onViewClick: function (event) {
@@ -2117,9 +2118,7 @@ var EditorRenderLines = React.createClass ({
   },
 
   onScroll: function (scrollTop) {
-    if (this.refs.lines.scrollTop !== scrollTop) {
-      this.refs.lines.scrollTop = scrollTop;
-    }
+    this.forceUpdate ();
   },
 
   componentDidMount: function () {
@@ -2135,19 +2134,23 @@ var EditorRenderLines = React.createClass ({
   },
 
   render: function () {
-    const left_offset = this.props.store.getLeftOffsetChars ();
-    const lines       = this.props.store.lines.map (function (line, index) {
+    const store       = this.props.store;
+    const left_offset = store.getLeftOffsetChars ();
+    const first_line  = store.getScrollTopLine ();
+    const last_line   = store.getScrollBottomLine ();
+    const lines       = store.lines.filter (function (line) {
+      return line.index >= first_line && line.index <= last_line;
+    }).map (function (line, index) {
       return <EditorRenderLine key={line.id} line={line} />;
     });
 
     return (
       <div ref="lines" className="lines"
-           style={{ left: left_offset + "em" }}
-           onScroll={this.onViewScroll}
+           style={{ left: left_offset + "em", height: store.lineHeight * store.lines.length }}
            onClick={this.onViewClick}>
         {lines}
-        <EditorRenderIndentRanges ranges={this.props.store.indentRanges} />
-        <EditorRenderCursorContainer cursors={this.props.store.cursors} />
+        <EditorRenderIndentRanges ranges={store.indentRanges} />
+        <EditorRenderCursorContainer cursors={store.cursors} />
       </div>
     );
   }
@@ -2160,33 +2163,43 @@ var Editor = React.createClass ({
     store: React.PropTypes.instanceOf (EditorStore).isRequired
   },
 
-  onKeyDown: function (event) {
+  onScroll: function (scrollTop) {
+    if (this.refs.container.scrollTop !== scrollTop) {
+      this.refs.container.scrollTop = scrollTop;
+    }
+  },
+
+  onContainerKeyDown: function (event) {
     if (this.props.store.keymap.onKeyDown (event)) {
       event.preventDefault ();
       event.stopPropagation ();
     }
   },
 
-  onKeyUp: function (event) {
+  onContainerKeyUp: function (event) {
     if (this.props.store.keymap.onKeyUp (event)) {
       event.preventDefault ();
       event.stopPropagation ();
     }
   },
 
-  onKeyPress: function (event) {
+  onContainerKeyPress: function (event) {
     if (this.props.store.keymap.onKeyPress (event)) {
       event.preventDefault ();
       event.stopPropagation ();
     }
   },
 
-  onFocus: function () {
+  onContainerFocus: function () {
     this.props.store.cursors.startBlink (true);
   },
 
-  onBlur: function () {
+  onContainerBlur: function () {
     this.props.store.cursors.stopBlink (false);
+  },
+
+  onContainerScroll: function () {
+    this.props.store.onScroll (this.refs.container.scrollTop);
   },
 
   updateFromCharGuide: function () {
@@ -2208,13 +2221,24 @@ var Editor = React.createClass ({
         this.refs.container.focus ();
       }.bind (this));
     }
+
+    this.props.store.Scroll.bindTo (this, this.onScroll);
+  },
+
+  componentWillUnmount: function () {
+    this.props.store.Scroll.unbindFrom (this);
   },
 
   render: function () {
     const store = this.props.store;
 
     return (
-      <div ref="container" className="editor" tabIndex={1} onKeyDown={this.onKeyDown} onKeyUp={this.onKeyUp} onFocus={this.onFocus} onBlur={this.onBlur}>
+      <div ref="container" className="editor" tabIndex={1}
+           onKeyDown={this.onContainerKeyDown}
+           onKeyUp={this.onContainerKeyUp}
+           onFocus={this.onContainerFocus}
+           onBlur={this.onContainerBlur}
+           onScroll={this.onContainerScroll}>
         <div ref="charGuide" className="editor-char-guide">MM</div>
         <EditorRenderLineNumbers store={store} />
         <EditorRenderGutter store={store} />
