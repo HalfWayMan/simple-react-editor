@@ -397,12 +397,13 @@ EditorLine.prototype.updateIndent = function () {
 };
 
 EditorLine.prototype.computeRender = function () {
-  var ESCAPED    = { '&': "&amp;", '<': "&lt;", '>': "&gt;" };
+  const ESCAPED    = { '&': "&amp;", '<': "&lt;", '>': "&gt;" };
+
   var length     = this.content.length;
   var tab_size   = this.store.config.tabSize;
   var syntax     = this.syntax;
   var elements   = [];
-  var current    = { style: null, start: 0, end: -1, length: 0, chars: "" };
+  var current    = { style: null, start: 0, end: -1, length: 0, original: "", chars: "" };
   var last_index = 0;
 
   if (syntax) {
@@ -427,27 +428,31 @@ EditorLine.prototype.computeRender = function () {
   }
 
   function append_to_current (style, escaped, what) {
-    var chars;
+    var chars, original;
 
     if (typeof what === "number") {
       if (!escaped) {
         if (what === 0x3c) {
-          chars = "&lt;";
+          chars    = "&lt;";
+          original = "<";
         } else if (what === 0x3e) {
-          chars = "&gt;";
+          chars    = "&gt;";
+          original = ">";
         } else if (what === 0x26) {
-          chars = "&amp;";
+          chars    = "&amp;";
+          original = "&";
         } else {
-          chars = String.fromCodePoint (what);
+          chars = original = String.fromCodePoint (what);
         }
       } else {
-        chars = String.fromCodePoint (what);
+        chars = original = String.fromCodePoint (what);
       }
     } else if (typeof what === "string") {
       if (escaped) {
-        chars = what;
+        chars = original = what;
       } else {
-        chars = what.replace (/[&<>]/g, function (c) {
+        original = what;
+        chars    = what.replace (/[&<>]/g, function (c) {
           return ESCAPED[c];
         });
       }
@@ -456,15 +461,18 @@ EditorLine.prototype.computeRender = function () {
     }
 
     if (current.style === null) {
-      current.style  = style;
-      current.chars += chars;
+      current.style     = style;
+      current.chars    += chars;
+      current.original += original;
     } else if (current.style !== style) {
       submit_current ();
 
-      current.style = style;
-      current.chars = chars;
+      current.style    = style;
+      current.chars    = chars;
+      current.original = original;
     } else {
-      current.chars += chars;
+      current.chars    += chars;
+      current.original += original;
     }
   }
 
@@ -1816,6 +1824,15 @@ EditorStore.prototype.getScrollBottomLine = function () {
   return this.getScrollTopLine () + Math.floor (this.viewHeight / this.lineHeight);
 };
 
+EditorStore.prototype.scrollToLine = function (line, center) {
+  const offset = line * this.lineHeight;
+  if (center) {
+    this.onScroll (offset - this.viewHeight / 2);
+  } else {
+    this.onScroll (offset);
+  }
+};
+
 EditorStore.prototype.onScroll = function (scrollTop) {
   this.scrollTop = scrollTop;
   this.Scroll.fire (scrollTop);
@@ -2529,8 +2546,8 @@ EditorMinimap.prototype.render = function () {
     line.elements.forEach (function (element) {
       if (x < width && element.style !== null && element.style !== "whitespace") {
         const color = theme[element.style];
-        for (var j = 0; j < element.chars.length && x < width; j++, x += 2) {
-          EditorMinimap.renderChar (charData, buffer, x, y, element.chars.charCodeAt (j), theme.background, color);
+        for (var j = 0; j < element.original.length && x < width; j++, x += 2) {
+          EditorMinimap.renderChar (charData, buffer, x, y, element.original.charCodeAt (j), theme.background, color);
         }
       } else {
         x += 2 * element.length;
@@ -2585,6 +2602,9 @@ var EditorRenderMinimapSlider = React.createClass ({
 
     this.removeMouseUp ();
     this.removeMouseUp = null;
+
+    this.setState ({ dragging: false, start: 0, startTop: 0 });
+    return false;
   },
 
   onSliderChanged: function () {
@@ -2615,7 +2635,29 @@ var EditorRenderMinimap = React.createClass ({
   },
 
   onScroll: function (scrollTop) {
-    this.refs.minimap.style.top = scrollTop + "px";
+    const store = this.props.store;
+    const limit = store.lineHeight * store.lines.length - store.viewHeight;
+    this.refs.minimap.style.top = Math.min (scrollTop, limit) + "px";
+  },
+
+  /*
+  onCanvasClick: function (event) {
+    const minimap = this.minimap;
+    const crect   = this.refs.minimap.getBoundingClientRect ();
+    const offset  = event.clientY - crect.top;
+    const desired = Math.min (minimap.sliderMaxTop, Math.max (0, offset - minimap.sliderHeight / 2));
+
+    this.props.store.onScroll (Math.round (desired / minimap.sliderRatio));
+  },
+  */
+
+  onCanvasClick: function (event) {
+    const minimap = this.minimap;
+    const crect   = this.refs.minimap.getBoundingClientRect ();
+    const offset  = event.clientY - crect.top;
+    const line    = Math.min (this.props.store.lines.length, minimap.lineStart + offset / EditorMinimap.CHAR_HEIGHT);
+
+    this.props.store.scrollToLine (line, true);
   },
 
   onDimensionsChanged: function () {
@@ -2655,7 +2697,7 @@ var EditorRenderMinimap = React.createClass ({
 
     return (
       <div ref="minimap" className="minimap" style={style}>
-        <canvas ref="canvas" />
+        <canvas ref="canvas" onClick={this.onCanvasClick} />
         {this.minimap ? <EditorRenderMinimapSlider minimap={this.minimap} /> : null}
       </div>
     );
