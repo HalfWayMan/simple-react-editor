@@ -181,48 +181,13 @@ var EditorLineMarker = function () {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
-var EditorEncapsulators = function (content) {
-  this.opens  = { '[': [], '{': [], '(': [] };
-  this.closes = { ']': [], '}': [], ')': [] };
-  this.update (content);
-};
-
-EditorEncapsulators.isEncapsulator = function (char) {
-  return char === '[' || char === ']' || char === '(' || char === ')' || char === '{' || char === '}';
-};
-
-EditorEncapsulators.prototype.reset = function () {
-  this.opens['['] = [];
-  this.opens['('] = [];
-  this.opens['{'] = [];
-  this.closes[']'] = [];
-  this.closes[')'] = [];
-  this.closes['}'] = [];
-}
-
-EditorEncapsulators.prototype.update = function (content) {
-  this.reset ();
-
-  for (var i = 0; i < content.length; i++) {
-    var char = content[i];
-
-    if (char === '(' || char === '{' || char === '[') {
-      this.opens[char] = i;
-    } else if (char === ')' || char === '}' || char === ']') {
-      this.closes[char] = i;
-    }
-  }
-};
-
-/* --------------------------------------------------------------------------------------------------------------------------- */
-
 var EditorLine = function (store, index, content) {
   this.id            = store.nextLineId ();
   this.store         = store;
   this.index         = index;
   this.content       = content;
+  this.indent        = 0;
   this.marker        = null;
-  this.encapsulators = null;
 
   this.syntaxIn      = 0;     /* syntax state entering line */
   this.syntaxOut     = 0;     /* syntax state exiting line */
@@ -233,13 +198,14 @@ var EditorLine = function (store, index, content) {
   this.MarkerChanged  = new EditorEvent ("EditorLine.MarkerChanged");
   this.Clicked        = new EditorEvent ("EditorLine.Clicked");
 
+  this.updateIndent ();
   this.computeRender ();
 };
 
 EditorLine.prototype.setContent = function (content) {
   if (content !== this.content) {
     this.content = content;
-    this.updateEncapsulators ();
+    this.updateIndent ();
     this.computeRender ();
     this.onContentChanged ();
   }
@@ -296,6 +262,11 @@ EditorLine.prototype.clearMarker = function () {
 EditorLine.prototype.setActive = function () {
   this.store.cursors.removeSecondary ();
   this.store.cursors.primary.setLine (this.index);
+};
+
+EditorLine.prototype.updateIndent = function () {
+  var res = /^\s*/.exec (this.content);
+  this.indent = res ? res[0].length : 0;
 };
 
 EditorLine.prototype.computeRender = function () {
@@ -437,14 +408,9 @@ EditorLine.prototype.computeRender = function () {
   }
 };
 
-EditorLine.prototype.updateEncapsulators = function () {
-  if (this.encapsulators === null) {
-    this.encapsulators = new EditorEncapsulators (this.content);
-  } else this.encapsulators.update (this.content);
-};
-
 EditorLine.prototype.isEncapsulatorAt = function (column) {
-  return EditorEncapsulators.isEncapsulator (this.content[column]);
+  var char = this.content[column];
+  return char === '[' || char === ']' || char === '(' || char === ')' || char === '{' || char === '}';
 };
 
 EditorLine.prototype.getPreviousEncapsulator = function (start_col) {
@@ -709,20 +675,35 @@ EditorCursor.prototype.insertLine = function () {
   if (this.selection) {
     /* replace selection */
   } else {
+    var current_indent = this.getLine ().indent;
+    var indent         = new Array (current_indent + 1).join (' ');
+    console.log ("current_indent", current_indent);
+
     if (this.position.column === 0) {
       /* Special case when at start of line: just insert empty line above */
-      this.store.insertLine (this.position.line, new EditorLine (this.store, 0, ""));
-      this.moveDown (1, false);
+      this.store.insertLine (this.position.line, new EditorLine (this.store, 0, indent));
+
+      if (current_indent === 0) {
+        this.moveDown (1, false);
+      } else {
+        this.setLocation ({ line: this.position.line + 1, column: current_indent });
+      }
     } else if (this.position.column === this.getLine ().getLength ()) {
       /* Special case when at end of line: just insert empty line below */
-      this.store.insertLine (this.position.line + 1, new EditorLine (this.store, 0, ""));
-      this.moveDown (1, false);
+      var new_content = new Array (current_indent + 1).join (' ');
+      this.store.insertLine (this.position.line + 1, new EditorLine (this.store, 0, indent));
+
+      if (current_indent === 0) {
+        this.moveDown (1, false);
+      } else {
+        this.setLocation ({ line: this.position.line + 1, column: current_indent });
+      }
     } else {
       const line   = this.getLine ();
       const latter = line.getTextFrom (this.position.column);
       line.deleteTextFrom (this.position.column);
-      this.store.insertLine (this.position.line + 1, new EditorLine (this.store, 0, latter));
-      this.setLocation ({ line: this.position.line + 1, column: 0 }, false);
+      this.store.insertLine (this.position.line + 1, new EditorLine (this.store, 0, indent + latter));
+      this.setLocation ({ line: this.position.line + 1, column: current_indent }, false);
     }
   }
 };
