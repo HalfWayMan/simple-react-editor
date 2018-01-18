@@ -2446,7 +2446,7 @@ EditorMinimap.prototype.updateLayout = function () {
   this.sliderMaxTop = Math.min (this.height - this.sliderHeight, this.sliderMaxTop);
   this.SliderChanged.fire ();
 
-  this.sliderRatio = Math.max (1, this.sliderMaxTop / (line_height * store.lines.length - store.viewHeight));
+  this.sliderRatio = this.sliderMaxTop / (line_height * store.lines.length - store.viewHeight);
   this.sliderTop   = store.scrollTop * this.sliderRatio;
 
   if (max_lines >= store.lines.length) {
@@ -2599,7 +2599,9 @@ var EditorRenderMinimapSlider = React.createClass ({
     const delta   = event.clientY - this.state.start;
     const desired = Math.min (minimap.sliderMaxTop, Math.max (0, this.state.startTop + delta));
 
-    minimap.store.onScroll (Math.round (desired / minimap.sliderRatio));
+    if (minimap.sliderRatio > 0) {
+      minimap.store.onScroll (Math.round (desired / minimap.sliderRatio));
+    }
   },
 
   onMouseUp: function () {
