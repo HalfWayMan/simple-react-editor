@@ -424,7 +424,7 @@ EditorLine.prototype.computeRender = function () {
     current.length = last_index - current.start;
 
     elements.push (current);
-    current = { style: null, start: last_index, end: -1, length: 0, chars: "" };
+    current = { style: null, start: last_index, end: -1, length: 0, original: "", chars: "" };
   }
 
   function append_to_current (style, escaped, what) {
@@ -1501,7 +1501,7 @@ EditorSyntaxEngine.JavaScript = {
 
       {
         name:  "reserved_word",
-        expr:  /^(var|function|new|this|typeof|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|while|do|instanceof|const)\b/,
+        expr:  /^(var|function|new|this|typeof|true|false|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|while|do|instanceof|const)\b/,
         style: "reserved_word"
       },
 
