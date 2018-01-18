@@ -24,6 +24,10 @@ div.editor {
   line-height: @editor-line-height;
   overflow-y: auto;
 
+  &:focus {
+    outline: none;
+  }
+
   div.editor-char-guide {
     position: absolute;
     left: 0;
@@ -36,6 +40,7 @@ div.editor {
     top: 0;
     left: 0;
     min-width: 1em;
+    min-height: 100%;
     background-color: #1e1e1e;
     overflow-y: hidden;
     .fixed-mixin();
@@ -49,6 +54,7 @@ div.editor {
     top: 0;
     left: 0;
     width: 1em;
+    min-height: 100%;
     background-color: #1e1e1e;
     overflow-y: hidden;
     .noselect();
@@ -64,6 +70,7 @@ div.editor {
     top: 0;
     left: 0;
     right: 0;
+    min-height: 100%;
     background-color: #1e1e1e;
     cursor: text;
     overflow-x: auto;
@@ -187,7 +194,9 @@ div.editor {
     top: 0;
     right: 0;
     width: 100px;
+    min-height: 100%;
     background-color: #1e1e1e;
+    overflow: hidden;
     border-left: 1px solid black;
     box-shadow: -1px 0px 10px 0px rgba(0,0,0,0.6);
     .noselect();
@@ -203,9 +212,6 @@ div.editor {
       left: 0;
       right: 0;
       opacity: 0;
-
-      top: 0;
-      height: 100px;
 
       cursor: move;
       background-color: #888;

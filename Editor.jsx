@@ -2446,8 +2446,8 @@ EditorMinimap.prototype.updateLayout = function () {
   this.sliderMaxTop = Math.min (this.height - this.sliderHeight, this.sliderMaxTop);
   this.SliderChanged.fire ();
 
-  this.sliderRatio = this.sliderMaxTop / (line_height * store.lines.length - store.viewHeight);
-  this.sliderTop  = store.scrollTop * this.sliderRatio;
+  this.sliderRatio = Math.max (1, this.sliderMaxTop / (line_height * store.lines.length - store.viewHeight));
+  this.sliderTop   = store.scrollTop * this.sliderRatio;
 
   if (max_lines >= store.lines.length) {
     this.lineStart = 0;
@@ -2637,7 +2637,7 @@ var EditorRenderMinimap = React.createClass ({
   onScroll: function (scrollTop) {
     const store = this.props.store;
     const limit = store.lineHeight * store.lines.length - store.viewHeight;
-    this.refs.minimap.style.top = Math.min (scrollTop, limit) + "px";
+    this.refs.minimap.style.top = Math.max (0, Math.min (scrollTop, limit)) + "px";
   },
 
   /*
