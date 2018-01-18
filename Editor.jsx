@@ -1428,7 +1428,6 @@ var EditorSyntaxEngine = function (config) {
           throw new Error ("Unknown rule '" + impdec.name + "' in state '" + impdec.state + "' in import declaration");
         }
 
-        console.log
         var found = this.config[impdec.state].ruleMap[impdec.name];
         ruleMap[impdec.name] = found;
         rules.push (found);
@@ -1834,8 +1833,8 @@ EditorStore.prototype.scrollToLine = function (line, center) {
 };
 
 EditorStore.prototype.onScroll = function (scrollTop) {
-  this.scrollTop = scrollTop;
-  this.Scroll.fire (scrollTop);
+  this.scrollTop = Math.max (0, scrollTop);
+  this.Scroll.fire (this.scrollTop);
 };
 
 EditorStore.prototype.onCursorChanged = function (cursor) {
@@ -2331,6 +2330,7 @@ var EditorMinimap = function (store, canvas) {
   this.SliderChanged = new EditorEvent ("EditorMinimap.SliderChanged");
 
   this.store.LinesChanged.bindTo (this, this.onLinesChanged);
+  this.store.LineContentChanged.bindTo (this, this.onLineContentChanged);
   this.store.Scroll.bindTo (this, this.onScroll);
 };
 
@@ -2540,7 +2540,7 @@ EditorMinimap.prototype.render = function () {
 
   this.clearBuffer ();
 
-  for (var y = 0, i = this.lineStart; i < this.lineEnd; i++, y += 4) {
+  for (var y = 0, i = this.lineStart; i <= this.lineEnd; i++, y += 4) {
     var x = 0, line = store.lines[i];
 
     line.elements.forEach (function (element) {
@@ -2561,6 +2561,12 @@ EditorMinimap.prototype.render = function () {
 EditorMinimap.prototype.onLinesChanged = function () {
   this.updateLayout ();
   this.render ();
+};
+
+EditorMinimap.prototype.onLineContentChanged = function (line) {
+  if (line.index >= this.lineStart && line.index <= this.lineEnd) {
+    this.render ();
+  }
 };
 
 EditorMinimap.prototype.onScroll = function () {
@@ -2660,14 +2666,7 @@ var EditorRenderMinimap = React.createClass ({
     this.props.store.scrollToLine (line, true);
   },
 
-  onDimensionsChanged: function () {
-    this.forceUpdate (function () {
-      this.minimap.updateLayout ();
-      this.minimap.render ();
-    }.bind (this));
-  },
-
-  onThemeChanged: function () {
+  refreshMinimap: function () {
     this.forceUpdate (function () {
       this.minimap.updateLayout ();
       this.minimap.render ();
@@ -2678,8 +2677,8 @@ var EditorRenderMinimap = React.createClass ({
     this.minimap = new EditorMinimap (this.props.store, this.refs.canvas);
 
     this.props.store.Scroll.bindTo (this, this.onScroll);
-    this.props.store.LineHeightChanged.bindTo (this, this.onDimensionsChanged);
-    this.props.store.editorTheme.Changed.bindTo (this, this.onThemeChanged);
+    this.props.store.LineHeightChanged.bindTo (this, this.refreshMinimap);
+    this.props.store.editorTheme.Changed.bindTo (this, this.refreshMinimap);
   },
 
   componentWillUnmount: function () {
