@@ -1,0 +1,33 @@
+{
+  "name": "simple-react-editor",
+  "version": "0.0.1",
+  "description": "A basic code editor for React with a minimal footprint",
+  "license": "BSD-3-Clause",
+  "homepage": "htts://halfwayman.github.io/projects/simple-react-editor",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HalfWayMan/simple-react-editor"
+  },
+  "keywords": [
+    "react",
+    "editor"
+  ],
+  "main": "src/Editor.jsx",
+  "devDependencies": {
+    "docdash": "^0.4.0",
+    "jsdoc": "^3.5.5",
+    "babel-plugin-transform-react-jsx": "^6.24.1"
+  },
+  "babel": {
+    "presets": [
+      "es2015",
+      "stage-2",
+      "react"
+    ]
+  },
+  "scripts": {
+    "generate-docs": "node_modules/.bin/jsdoc -c .jsdoc.json"
+  },
+  "dependencies": {
+  }
+}
