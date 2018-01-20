@@ -745,6 +745,7 @@ var EditorLine = function (store, index, content, no_update) {
    * @see {@link EditorLine#computeRender}
    */
   this.render        = "";
+  this.dirty         = true;
 
   /**
    * The render elements of this line
@@ -794,6 +795,7 @@ var EditorLine = function (store, index, content, no_update) {
 EditorLine.prototype.setContent = function (content) {
   if (content !== this.content) {
     this.content = content;
+    this.dirty   = true;
     this.updateIndent ();
     this.computeRender ();
     this.onContentChanged ();
@@ -996,6 +998,10 @@ EditorLine.prototype.updateIndent = function () {
  * lines.
  */
 EditorLine.prototype.computeRender = function () {
+  if (!this.dirty) {
+    return;
+  }
+
   const tab_size = this.store.config.tabSize;
   const syntax   = this.store.syntaxEngine;
 
@@ -1035,6 +1041,7 @@ EditorLine.prototype.computeRender = function () {
   });
 
   this.render = builder.join ('');
+  this.dirty  = false;
 
   if (syntax) {
     this.syntaxOut = syntax.state;
@@ -1698,13 +1705,17 @@ EditorCursor.prototype.moveEnd = function (extend_selection) {
  * Insert text at the current cursor location.
  *
  * @param {string} text Text to insert
+ * @returns {EditorLine} The line on which we inserted the text
  */
 EditorCursor.prototype.insertText = function (text) {
   if (this.selection) {
     /* replace selection */
   } else {
-    this.getLine ().insertText (this.position.column, text);
+    const line = this.getLine ();
+
+    line.insertText (this.position.column, text);
     this.moveRight (text.length, false);
+    return line;
   }
 };
 
@@ -1728,17 +1739,19 @@ EditorCursor.prototype.insertTab = function () {
  * Insert a new line at the cursor location.
  *
  * @param {boolean} [auto_indent] Whether to auto-indent the new line
+ * @returns {EditorLine} The line that was inserted
  */
 EditorCursor.prototype.insertLine = function (auto_indent) {
   if (this.selection) {
     /* replace selection */
   } else {
+    var result         = null;
     var current_indent = auto_indent ? this.getLine ().indent : 0;
     var indent         = auto_indent ? new Array (current_indent + 1).join (' ') : "";
 
     if (this.position.column === 0) {
       /* Special case when at start of line: just insert empty line above */
-      this.store.insertLine (this.position.line, new EditorLine (this.store, 0, indent));
+      this.store.insertLine (this.position.line, result = new EditorLine (this.store, 0, indent));
 
       if (current_indent === 0) {
         this.moveDown (1, false);
@@ -1748,7 +1761,7 @@ EditorCursor.prototype.insertLine = function (auto_indent) {
     } else if (this.position.column === this.getLine ().getLength ()) {
       /* Special case when at end of line: just insert empty line below */
       var new_content = new Array (current_indent + 1).join (' ');
-      this.store.insertLine (this.position.line + 1, new EditorLine (this.store, 0, indent));
+      this.store.insertLine (this.position.line + 1, result = new EditorLine (this.store, 0, indent));
 
       if (current_indent === 0) {
         this.moveDown (1, false);
@@ -1759,9 +1772,12 @@ EditorCursor.prototype.insertLine = function (auto_indent) {
       const line   = this.getLine ();
       const latter = line.getTextFrom (this.position.column);
       line.deleteTextFrom (this.position.column);
-      this.store.insertLine (this.position.line + 1, new EditorLine (this.store, 0, indent + latter));
+      this.store.insertLine (this.position.line + 1, result = new EditorLine (this.store, 0, indent + latter));
       this.setLocation ({ line: this.position.line + 1, column: current_indent }, false);
     }
+
+    result.computeRender ();
+    return result;
   }
 };
 
@@ -1864,6 +1880,9 @@ EditorCursor.prototype.removeSelection = function () {
   }
 };
 
+/**
+ * Delete the text selected by this cursor.
+ */
 EditorCursor.prototype.deleteSelected = function () {
   if (this.selection) {
     this.store.removeRegion (this.selection.region);
@@ -1907,7 +1926,9 @@ EditorCursor.prototype.paste = function () {
     if (content.indexOf ('\n') === -1) {
       this.insertText (content);
     } else {
-      var lines = this.clipboard.read ().split ('\n');
+      var lines    = this.clipboard.read ().split ('\n');
+      var inserted = [];
+
       for (var index = 0; index < lines.length; index++) {
         this.insertText (lines[index]);
         if (index < lines.length - 1) {
