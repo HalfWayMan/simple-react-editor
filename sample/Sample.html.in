@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>simple-react-editor</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <script type="text/javascript" src="https://agent.sulusoftware.co.uk/static/lib/react/react-with-addons-0.14.2.js"></script>
+    <script type="text/javascript" src="https://agent.sulusoftware.co.uk/static/lib/react/react-dom-0.14.2.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto+Condensed:300">
+    <link rel="stylesheet" href="Editor.css">
+    <style>
+      div.page-banner {
+        text-align: center;
+        background-color: #1e1e1e;
+        border-top: 1px solid #1e1e1e;
+        border-bottom: 1px solid #888;
+      }
+
+      div.page-banner > h1 {
+        color: #98cbeb;
+        font-weight: 800;
+        font-size: 42px;
+        margin: 60px 0 20px 0;
+      }
+
+      div.page-banner > p {
+        font-size: 24px;
+        color: #ddd;
+        font-family: 'Roboto Condensed', sans-serif;
+        margin: 0 0 60px 0;
+      }
+
+      a.code-ref {
+        position: relative;
+      }
+
+      a.code-ref.code {
+        font-family: monospace;
+      }
+
+      a.code-ref:after {
+        font-family: 'FontAwesome';
+        content: "\f121";
+        vertical-align: sub;
+        font-size: 11px;
+        display: inline-block;
+      }
+
+      h2.roboto, h3.roboto {
+        font-family: 'Roboto Condensed', sans-serif;
+        font-weight: normal;
+      }
+
+      pre.sample {
+        background-color: white;
+      }
+
+      pre.sample .comment {
+        color: #008000;
+      }
+
+      pre.sample .reserved_word {
+        color: #00f;
+      }
+
+      pre.sample .identifier {
+        color: #000;
+      }
+
+      pre.sample .type_name {
+        color: #673ab7;
+      }
+
+      pre.sample .string_literal {
+        color: #a31515;
+      }
+
+      pre.sample .string_literal_escape {
+        color: #9b5151;
+      }
+
+      pre.sample .number {
+        color: #b28d6c;
+      }
+
+      pre.sample .regexp {
+        color: #ff5722;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page-banner">
+        <h1>simple-react-editor</h1>
+        <p>A basic code editor for React with a minimal footprint</p>
+    </div>
+    <div class="container">
+      <div class="row" style="margin-top: 20px;">
+        <div class="col-md-12">
+          <div id="editor-container" style="height: 600px;"></div>
+          <p class="text-center text-muted">
+            The editor above contains the source code for the editor itself. Clicking on <a href="#" class="code-ref" data-ref="EditorStore.prototype.scrollToLine">code references</a> in this page will jump to them in this editor.
+          </p>
+        </div>
+      </div>
+      <div class="row" style="margin-top: 40px; margin-bottom: 40px;">
+        <div class="col-md-6 col-sm-12">
+          <div class="media">
+            <div class="media-left">
+              <img class="media-object" src="media/code-footprint.png" width="200" height="100">
+            </div>
+            <div class="media-body">
+              <h3 class="media-heading roboto">Small Code Footprint</h3>
+              The editor is single-source (~CLOC KLOC), fairly small (~MINIFIED_SIZEK minified, ~GZIP_SIZEK compressed) and completely self-contained (well, apart from the dependency on React).
+            </div>
+          </div>
+          <div class="media">
+            <div class="media-left">
+              <a href="#syntax-highlighting">
+                <img class="media-object" src="media/syntax-highlighting.png" width="200" height="100">
+              </a>
+            </div>
+            <div class="media-body">
+              <h3 class="media-heading roboto"><a href="#syntax-highlighting">Syntax Highlighting</a></h3>
+              Simple <a href="#" class="code-ref" data-ref="var EditorSyntaxEngine">rule-based syntax highlighting</a> is provided, with built-in <a href="#" class="code-ref" data-ref="EditorSyntaxEngine.JavaScript =">JavaScript</a> syntax.
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6 col-sm-12">
+          <div class="media">
+            <div class="media-left">
+              <a href="#multiple-cursors">
+                <img class="media-object" src="media/multiple-cursors.png" width="200" height="100">
+              </a>
+            </div>
+            <div class="media-body">
+              <h3 class="media-heading roboto"><a href="#multiple-cursors">Multiple Cursors</a></h3>
+              Multiple cursors can be created above and below the main cursor. These cursors act as separate edit points.
+            </div>
+          </div>
+          <div class="media">
+            <div class="media-left">
+              <a href="#minimap">
+                <img class="media-object" src="media/minimap.png" width="200" height="100">
+              </a>
+            </div>
+            <div class="media-body">
+              <h3 class="media-heading roboto"><a href="#minimap">Minimap</a></h3>
+              An optional <a href="#" class="code-ref" data-ref="var EditorMinimap">minimap</a> is available to the right of the editor that presents a small rendering of the current view.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-12">
+          <h3 class="roboto">Written in Plain JavaScript (and JSX)</h3>
+          <p>The editor is written in <i>almost</i> plain ES5 (it uses JSX syntax for the React components), so no ES6 features are required.</p>
+          <h3 class="roboto">Easy to Use API</h3>
+          <p>Simple JavaScript "classes" with full access to editor internals. <a href="#api">More &hellip;</a></p>
+          <h3 class="roboto">Simple Flux-like Architecture</h3>
+          <p>The editor is event-driven with a very simple <a href="#" class="code-ref" data-ref="var EditorEvent">event system</a> and <a href="#" class="code-ref" data-ref="this.ContentChanged">numerous events</a> for easy integration into application.</p>
+          <h3 class="roboto">Clipboard Integration</h3>
+          <p>The editor includes clipboard integration with extended support for multiple-cursors.</p>
+          <h3 class="roboto">Auto-Indentation and Indentation Guides</h3>
+          <p>Automatic indentation is supported with soft and hard tab support and configurable tab sizes. Indentation guides are also rendered as a visual aid. <a href="#auto-indent">More &hellip;</a></p>
+          <h3 class="roboto">Encapsulator Highlighting</h3>
+          <p>Moving the cursor next to an encapsulation character will highlight the corresponding open/close character. <a href="#encapsulator">More &hellip;</a></p>
+          <h3 class="roboto">Simple Semantic Engine</h3>
+          <p>Providing support for contextual-aware code guides such as automatic encapsulator insertion and code-folding. <a href="#semantics">More &hellip;</a></p>
+          <h3 class="roboto">Line Gutter</h3>
+          <p>Customizable <a href="#" class="code-ref" data-ref="var EditorRenderGutter">line gutter</a> components for line indicators <a href="#line-gutter">More &hellip;</a></p>
+          <h3 class="roboto">Simple CSS-based Styling</h3>
+          <p>The CSS for the editor has been kept as simple as possible. The themeing is also controlled with CSS, and the editor will automatically <a href="#" class="code-ref" data-ref="var EditorThemeColors">extract theme colors</a> from the DOM for rendering things like the minimap. <a href="#simple-css">More &hellip;</a></p>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-12">
+          <hr>
+          <h2 class="roboto" id="syntax-highlighting">Syntax Highlighting</h2>
+          <p>
+            The syntax highlighting is provided by the <a href="#" class="code-ref code" data-ref="var EditorSyntaxEngine">EditorSyntaxEngine</a> class. This class provides a handful of methods for running a state machine that performs the syntax highlighting in the editor.
+          </p>
+          <pre class="sample">
+            var highlighter = new EditorSyntaxEngine (EditorSyntax.JavaScript);
+            highlighter.staticHighlight (lines, initial_state, tab_size);
+          </pre>
+          <h2 class="roboto" id="multiple-cursors">Multiple Cursors</h2>
+          <h2 class="roboto" id="minimap">Minimap</h2>
+          <h2 class="roboto" id="auto-indent">Indentation</h2>
+          <h2 class="roboto" id="encapsulator">Encapsulator Highlighting</h2>
+          <h2 class="roboto" id="line-gutter">Line Gutter Items</h2>
+          <h2 class="roboto" id="simple-css">CSS Styling</h2>
+          <h2 class="roboto" id="api">API</h2>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-12">
+          <hr>
+          <small class="text-muted">
+            Copyright &copy; 2018 Blake Rain
+            <br />
+            License under <a href="https://opensource.org/licenses/BSD-3-Clause">BSD3</a>
+          </small>
+        </div>
+      </div>
+    </div>
+    <a href="https://github.com/HalfWayMan/simple-react-editor"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/365986a132ccd6a44c23a9169022c0b5c890c387/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f7265645f6161303030302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png"></a>
+    <script type="text/javascript" src="Editor.js"></script>
+    <script type="text/javascript">
+      (function () {
+        var load_own_source = window.location.hash !== "#empty";
+        var own_source      = "SOURCE";
+
+        var store     = null;
+        var config    = { mountFocused: false };
+        var container = document.getElementById ("editor-container");
+        var factory   = React.createFactory (Editor);
+
+        function createEditor (content) {
+          store = new EditorStore (config, content);
+          ReactDOM.render (factory ({ store: store }, null), container);
+        }
+
+        function isEditorVisible () {
+          var crect = container.getBoundingClientRect ();
+
+          return (
+            crect.top >= 0 &&
+            crect.left >= 0 &&
+            crect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+            crect.right <= (window.innerWidth || document.documentElement.clientWidth)
+          );
+        }
+
+        if (load_own_source) {
+          createEditor (atob (own_source));
+
+          document.querySelectorAll ("a[data-ref]").forEach (function (anchor) {
+            var ref  = anchor.attributes["data-ref"].value;
+            var line = store.findLineContains (new RegExp (ref));
+
+            if (line === -1) {
+              console.error ("Code reference '" + ref + "' could not be found in editor source");
+            } else {
+              anchor.setAttribute ("title", "Goto Line " + (1 + line) + " in editor");
+              anchor.setAttribute ("data-toggle", "tooltip");
+              anchor.setAttribute ("data-placement", "top");
+
+              EditorTools.listen (anchor, "click", function (event) {
+                event.preventDefault ();
+                if (!isEditorVisible ()) {
+                  container.scrollIntoView ();
+                }
+
+                store.scrollToLine (line, true);
+                store.setCursorLocation (new EditorPosition (line, 0));
+              });
+            }
+          });
+        } else {
+          createEditor ("");
+        }
+
+        var highlighter = new EditorSyntaxEngine (EditorSyntaxEngine.JavaScript);
+        document.querySelectorAll ("pre[class='sample']").forEach (function (element) {
+          var lines  = element.innerText.split (/[\r\n]/);
+          var indent = /^\s*/.exec (lines[0]);
+          if (indent) {
+            const empty_re = /^\s*$/;
+            const strip_re = new RegExp ("^\\s{" + indent[0].length + "}");
+            lines = lines.map (function (line) {
+              return line.replace (strip_re, "");
+            });
+
+            while (lines.length > 0) {
+              if (empty_re.test (lines[lines.length - 1])) {
+                lines.pop ();
+              } else break;
+            }
+          }
+
+          element.innerHTML = highlighter.highlightLines (lines, 0, 2).map (function (regions) {
+            return regions.map (function (region) {
+              return "<span class=\"" + region.style + "\">" + region.escaped + "</span>";
+            }).join ("");
+          }).join ("<br>");
+        });
+      }) ();
+    </script>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+    <script type="text/javascript">
+      $('[data-toggle="tooltip"]').tooltip ()
+    </script>
+  </body>
+</html>
