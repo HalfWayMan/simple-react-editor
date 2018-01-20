@@ -1,0 +1,17 @@
+{
+  "source": {
+    "include": "./src",
+    "includePattern": ".js[x]"
+  },
+  "plugins": [
+    "plugins/markdown"
+  ],
+  "markdown": {
+    "tags": [ "default" ]
+  },
+  "opts": {
+    "template": "node_modules/docdash",
+    "encoding": "utf8",
+    "destination": "docs/"
+  }
+}
