@@ -349,6 +349,14 @@ var EditorRange = function (start_line, start_col, end_line, end_col) {
 };
 
 /**
+ * Clone this range.
+ * @returns {EditorRange} A new range with the same location
+ */
+EditorRange.prototype.clone = function () {
+  return new EditorRange (this.start_line, this.start_column, this.end_line, this.end_column);
+};
+
+/**
  * Return a string representation of the range.
  *
  * @example
@@ -888,6 +896,14 @@ EditorLine.prototype.getLength = function () {
 };
 
 /**
+ * Returns a range that encloses this line.
+ * @returns {EditorRange} A range that encloses this line
+ */
+EditorLine.prototype.getRange = function () {
+  return new EditorRange (this.index, 0, this.index, this.getLength ());
+};
+
+/**
  * Queries the {@see EditorStore} for the previous line.
  * @returns {EditorLine} The previous line (or `null`)
  */
@@ -1099,6 +1115,30 @@ EditorLine.prototype.getNextEncapsulator = function (start_col) {
   return null;
 };
 
+EditorLine.prototype.findPreviousWordStart = function (start, recurse) {
+  if (typeof start !== "number") {
+    start = this.getLength ();
+  }
+
+  const prefix = Array.from (this.content.substring (0, start)).reverse ().join ('');
+  const result = /\W*\w+/.exec (prefix);
+
+  if (result) {
+    return new EditorPosition (this, index, start - result[0].length);
+  } else return recurse ? this.getPrevious ().findPreviousWordStart (null, true) : null;
+};
+
+EditorLine.prototype.findNextWordEnd = function (start, recurse) {
+  start = start || 0;
+
+  const rest   = this.content.substring (start);
+  const result = /\W*\w+/.exec (rest);
+
+  if (result) {
+    return new EditorPosition (this.index, start + result[0].length);
+  } else return recurse ? this.getNext ().findNextWordEnd (null, true) : null;
+};
+
 /**
  * When a method in this class changes the contents of the line that results in a requirement
  * to re-render the display, this method is used to fire the {@link EditorLine#event:ContentChanged}
@@ -1161,20 +1201,7 @@ var EditorClipboard = function (primary) {
  * @returns {HTMLTextAreaElement}
  */
 EditorClipboard.prototype.createProxyElement = function () {
-  var element = this.proxy = document.createElement ("textarea");
-
-  element.style.position   = "fixed";
-  element.style.top        = 0;
-  element.style.left       = 0;
-  element.style.width      = "2em";
-  element.style.height     = "2em";
-  element.style.padding    = 0;
-  element.style.border     = "none";
-  element.style.outline    = "none";
-  element.style.boxShadow  = "none";
-  element.style.background = "transparent";
-
-  return element;
+  return null;
 };
 
 /**
@@ -1183,25 +1210,6 @@ EditorClipboard.prototype.createProxyElement = function () {
  */
 EditorClipboard.prototype.write = function (text) {
   this.content = text;
-
-  if (this.primary) {
-    if (!this.proxy) {
-      this.createProxyElement ();
-    }
-
-    this.proxy.value = text;
-    document.body.appendChild (this.proxy);
-    this.proxy.select ();
-
-    try {
-      document.execCommand ("copy");
-    } catch (err) {
-      console.error ("Unable to copy text to clipboard:", err);
-    }
-
-    this.proxy.value = "";
-    document.body.removeChild (this.proxy);
-  }
 };
 
 /**
@@ -1209,26 +1217,6 @@ EditorClipboard.prototype.write = function (text) {
  * @returns {string} The content of the clipboard
  */
 EditorClipboard.prototype.read = function () {
-  if (this.primary) {
-    if (!this.proxy) {
-      this.createProxyElement ();
-    }
-
-    document.body.appendChild (this.proxy);
-    this.proxy.focus ();
-
-    try {
-      var res = document.execCommand ("paste");
-      console.log("pasted:", this.proxy.value, res);
-    } catch (err) {
-      console.error ("Unable to paste text from clipboard:", err);
-    }
-
-    this.content = this.proxy.value;
-    this.proxy.value = "";
-    document.body.removeChild (this.proxy);
-  }
-
   return this.content;
 };
 
@@ -1266,6 +1254,20 @@ EditorSelection.prototype.adjustForCursor = function (location) {
   } else {
     this.region.set (this.start.line, this.start.column, location.line, location.column);
   }
+};
+
+EditorSelection.prototype.expandToInclude = function (location) {
+
+}
+
+/**
+ * Create a new selection fromt he given range.
+ * @param {EditorRange} range The range for the new selection
+ */
+EditorSelection.fromRange = function (range) {
+  var selection = new EditorSelection (range.getStartLocation ());
+  selection.region = range.clone ();
+  return selection;
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
@@ -1585,6 +1587,20 @@ EditorCursor.prototype.moveLeft = function (columns, extend_selection) {
   } else this.removeSelection ();
 };
 
+EditorCursor.prototype.moveWordLeft = function (extend_selection) {
+  if (!extend_selection && this.selection) {
+    this.setLocation (this.selection.region.getEndLocation ());
+    this.removeSelection ();
+    return;
+  }
+
+  const prev_loc = this.getLocation ();
+  const word_end = this.getLine ().findPreviousWordStart (this.position.column, true);
+
+  if (word_end) {
+    this.setLocation (word_end, extend_selection);
+  }
+};
 /**
  * Move the cursor to the right a number of columns (if it can), see {@link EditorCursor#setColumn}.
  *
@@ -1611,14 +1627,41 @@ EditorCursor.prototype.moveRight = function (columns, extend_selection) {
   } else this.removeSelection ();
 };
 
+EditorCursor.prototype.moveWordRight = function (extend_selection) {
+  if (!extend_selection && this.selection) {
+    this.setLocation (this.selection.region.getEndLocation ());
+    this.removeSelection ();
+    return;
+  }
+
+  const prev_loc = this.getLocation ();
+  const word_end = this.getLine ().findNextWordEnd (this.position.column, true);
+
+  if (word_end) {
+    this.setLocation (word_end, extend_selection);
+  }
+};
+
 /**
  * Move to the start of the line.
  *
- * @param {boolean} extend_selection Whether to extend the selection
+ * @param {boolean} [respect_indent]   Should we respect indentation first
+ * @param {boolean} [extend_selection] Whether to extend the selection
  */
-EditorCursor.prototype.moveStart = function (extend_selection) {
+EditorCursor.prototype.moveStart = function (respect_indent, extend_selection) {
   var prev_loc = this.getLocation ();
-  this.setColumn (0);
+
+  if (respect_indent) {
+    var current_indent = this.getLine ().indent;
+    if (this.position.column > current_indent) {
+      this.setColumn (current_indent);
+    } else {
+      this.setColumn (0);
+    }
+  } else {
+    this.setColumn (0);
+  }
+
   if (extend_selection) {
     this.extendSelection (prev_loc);
   } else this.removeSelection ();
@@ -1669,13 +1712,15 @@ EditorCursor.prototype.insertTab = function () {
 
 /**
  * Insert a new line at the cursor location.
+ *
+ * @param {boolean} [auto_indent] Whether to auto-indent the new line
  */
-EditorCursor.prototype.insertLine = function () {
+EditorCursor.prototype.insertLine = function (auto_indent) {
   if (this.selection) {
     /* replace selection */
   } else {
-    var current_indent = this.getLine ().indent;
-    var indent         = new Array (current_indent + 1).join (' ');
+    var current_indent = auto_indent ? this.getLine ().indent : 0;
+    var indent         = auto_indent ? new Array (current_indent + 1).join (' ') : "";
 
     if (this.position.column === 0) {
       /* Special case when at start of line: just insert empty line above */
@@ -1768,6 +1813,21 @@ EditorCursor.prototype.extendSelection = function (prev_loc) {
 };
 
 /**
+ * Select the entire line on which the cursor resides.
+ * @param {EditorLine} [line] An optional line to select
+ */
+EditorCursor.prototype.selectLine = function (line) {
+  if (!line) {
+    line = this.getLine ();
+  }
+
+  this.selection       = EditorSelection.fromRange (line.getRange ());
+  this.position.line   = line.index + 1;
+  this.position.column = 0;
+  this.onChanged ();
+};
+
+/**
  * Remove the selection
  */
 EditorCursor.prototype.removeSelection = function () {
@@ -1780,6 +1840,8 @@ EditorCursor.prototype.removeSelection = function () {
 EditorCursor.prototype.deleteSelected = function () {
   if (this.selection) {
     this.store.removeSelection (this.selection);
+    this.setLocation (this.selection.region.getStartLocation ());
+    this.removeSelection ();
   }
 };
 
@@ -1796,16 +1858,17 @@ EditorCursor.prototype.copySelected = function (cut) {
 
 EditorCursor.prototype.paste = function () {
   var content = this.clipboard.read ();
-  console.log ("paste content:", content);
 
-  if (content.indexOf ('\n') === -1) {
-    this.insertText (content);
-  } else {
-    var lines = this.clipboard.read ().split ('\n');
-    for (var index = 0; i < lines.length; i++) {
-      this.insertText (lines[index]);
-      if (index < lines.length - 1) {
-        this.insertLine ();
+  if (content) {
+    if (content.indexOf ('\n') === -1) {
+      this.insertText (content);
+    } else {
+      var lines = this.clipboard.read ().split ('\n');
+      for (var index = 0; index < lines.length; index++) {
+        this.insertText (lines[index]);
+        if (index < lines.length - 1) {
+          this.insertLine (false);
+        }
       }
     }
   }
@@ -2285,9 +2348,21 @@ EditorKeymap.defaultKeymap = [
     });
   }),
 
+  new EditorKeymap.Mapping ("down", "ArrowLeft", null, true, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.moveWordLeft (event.shiftKey);
+    });
+  }),
+
   new EditorKeymap.Mapping ("down", "ArrowRight", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
       cursor.moveRight (1, event.shiftKey);
+    });
+  }),
+
+  new EditorKeymap.Mapping ("down", "ArrowRight", null, true, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.moveWordRight (event.shiftKey);
     });
   }),
 
@@ -2305,7 +2380,7 @@ EditorKeymap.defaultKeymap = [
 
   new EditorKeymap.Mapping ("down", "Home", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
-      cursor.moveStart (event.shiftKey);
+      cursor.moveStart (true, event.shiftKey);
     });
   }),
 
@@ -2381,7 +2456,7 @@ EditorKeymap.defaultKeymap = [
 
   new EditorKeymap.Mapping ("down", "Enter", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
-      cursor.insertLine ();
+      cursor.insertLine (true);
     });
   }),
 
@@ -3431,6 +3506,64 @@ EditorStore.prototype.findLineContains = function (what) {
 };
 
 /**
+ * Extract the content from the store for the given selection.
+ * @param {EditorSelection} selection The selection to extract
+ */
+EditorStore.prototype.acquireSelectionContent = function (selection) {
+  const region  = selection.region;
+  var   content = [];
+
+  for (var i = region.start_line; i <= region.end_line; i++) {
+    const line  = this.lines[i];
+    const start = i === region.start_line ? region.start_column : 0;
+    const end   = i === region.end_line ? region.end_column : line.getLength ();
+    content.push (line.content.substring (start, end));
+  }
+
+  return content;
+};
+
+EditorStore.prototype.removeSelection = function (selection) {
+  const region       = selection.region;
+  var   start_col    = region.start_column;
+  var   remove_start = -1;
+  var   remove_end   = -1;
+
+  for (var i = region.start_line; i <= region.end_line; i++) {
+    const line    = this.lines[i];
+    const end_col = i === region.end_line ? region.end_column : line.getLength ();
+
+    if (start_col === 0 && end_col === line.getLength ()) {
+      /* The entire line is encompassed by the selection */
+      if (remove_start === -1) {
+        remove_start = i;
+      }
+
+      remove_end = Math.max (remove_end, i);
+    } else {
+      /* Only part of the line is encompassed by the selection */
+      line.deleteText (start_col, end_col - start_col);
+    }
+
+    /* Subsequent selected lines start at first column */
+    start_col = 0;
+  }
+
+  /* Remove the lines that we marked for removal */
+  if (remove_start !== -1) {
+    this.lines.splice (remove_start, (remove_end - remove_start) + 1);
+
+    const target = this.lines[region.start_line];
+    const source = this.lines[region.start_line + 1];
+    target.appendText (source.content);
+    this.lines.splice (region.start_line + 1, 1);
+
+    this.renumerateLines ();
+    this.onLinesChanged ();
+  }
+};
+
+/**
  * When scrolling takes place (or we need to scroll to a position) this method
  * is called to update the `scrollTop` property of the store and fire the
  * {@link EditorStore#event:Scroll} event.
@@ -3734,6 +3867,7 @@ var EditorRenderCursorSelection = React.createClass ({
   },
 
   onSelectionChanged: function () {
+    console.log ("EditorRenderCursorSelection.onSelectionChanged", this.props.cursor.primary);
     this.computeLineBlocks ();
     this.forceUpdate ();
   },
@@ -3925,16 +4059,55 @@ var EditorRenderLines = React.createClass ({
     store: React.PropTypes.instanceOf (EditorStore).isRequired
   },
 
-  onViewClick: function (event) {
-    var lines       = this.refs.lines;
-    var client_rect = lines.getBoundingClientRect ();
-    var top         = (event.clientY - client_rect.top) + lines.scrollTop;
-    var left        = (event.clientX - client_rect.left) + lines.scrollLeft;
-    var location    = this.props.store.clientToIndices (left, top);
+  getClickLocation: function (event) {
+    const lines       = this.refs.lines;
+    const client_rect = lines.getBoundingClientRect ();
+    const top         = (event.clientY - client_rect.top) + lines.scrollTop;
+    const left        = (event.clientX - client_rect.left) + lines.scrollLeft;
 
-    this.props.store.cursors.removeSecondary ();
-    this.props.store.cursors.primary.removeSelection ();
-    this.props.store.cursors.primary.setLocation (location, event.shiftKey);
+    return this.props.store.clientToIndices (left, top);
+  },
+
+  onViewClick: function (event) {
+    const store    = this.props.store;
+    const cursors  = store.cursors;
+    const location = this.getClickLocation (event);
+
+    cursors.removeSecondary ();
+
+    if (this.tripleTimeout) {
+      window.clearTimeout (this.tripleTimeout);
+      this.tripleTimeout = null;
+
+      const line = store.lines[location.line];
+      if (line) {
+        cursors.primary.selectLine (line);
+      }
+    } else {
+      cursors.primary.removeSelection ();
+      cursors.primary.setLocation (location, event.shiftKey);
+    }
+  },
+
+  onViewDoubleClick: function (event) {
+    if (this.tripleTimeout) {
+      window.clearTimeout (this.tripleTimeout);
+      this.tripleTimeout = null;
+    }
+
+    this.tripleTimeout = window.setTimeout (function () {
+      this.tripleTimeout = null;
+    }.bind (this), 300);
+  },
+
+  onViewTripleClicked: function (event) {
+    const location = this.getClickLocation (event);
+    const line     = store.lines[location.line];
+
+    if (line) {
+      store.cursors.removeSecondary ();
+      store.cursors.primary.selectLine (line);
+    }
   },
 
   onCharDimensionsChanged: function () {
@@ -3977,7 +4150,8 @@ var EditorRenderLines = React.createClass ({
     return (
       <div ref="lines" className="lines"
            style={{ left: left_offset + "em", height: store.lineHeight * store.lines.length, right: right }}
-           onClick={this.onViewClick}>
+           onClick={this.onViewClick}
+           onDoubleClick={this.onViewDoubleClick}>
         {lines}
         <EditorRenderIndentRanges ranges={store.indentRanges} />
         <EditorRenderCursorContainer cursors={store.cursors} />
