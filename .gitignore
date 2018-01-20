@@ -1,2 +1,4 @@
 node_modules/
 Editor.min.js
+docs
+.directory
