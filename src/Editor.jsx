@@ -1139,6 +1139,102 @@ EditorLine.prototype.onClicked = function () {
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
 /**
+ * A clipboard for a cursor.
+ *
+ * @param {boolean} [primary] Whether this clipboard should try and interact with the browser
+ */
+var EditorClipboard = function (primary) {
+  this.content = null;
+  this.primary = primary || false;
+  this.proxy   = null;
+
+  if (this.primary) {
+    this.createProxyElement ();
+  }
+};
+
+/**
+ * Create a clipboard proxy element (a `<textarea>`).
+ *
+ * https://stackoverflow.com/questions/400212/how-do-i-copy-to-the-clipboard-in-javascript
+ *
+ * @returns {HTMLTextAreaElement}
+ */
+EditorClipboard.prototype.createProxyElement = function () {
+  var element = this.proxy = document.createElement ("textarea");
+
+  element.style.position   = "fixed";
+  element.style.top        = 0;
+  element.style.left       = 0;
+  element.style.width      = "2em";
+  element.style.height     = "2em";
+  element.style.padding    = 0;
+  element.style.border     = "none";
+  element.style.outline    = "none";
+  element.style.boxShadow  = "none";
+  element.style.background = "transparent";
+
+  return element;
+};
+
+/**
+ * Write a value into the clipboard.
+ * @param {string} text The text value to save to the clipboard
+ */
+EditorClipboard.prototype.write = function (text) {
+  this.content = text;
+
+  if (this.primary) {
+    if (!this.proxy) {
+      this.createProxyElement ();
+    }
+
+    this.proxy.value = text;
+    document.body.appendChild (this.proxy);
+    this.proxy.select ();
+
+    try {
+      document.execCommand ("copy");
+    } catch (err) {
+      console.error ("Unable to copy text to clipboard:", err);
+    }
+
+    this.proxy.value = "";
+    document.body.removeChild (this.proxy);
+  }
+};
+
+/**
+ * Read a value from the clipboard.
+ * @returns {string} The content of the clipboard
+ */
+EditorClipboard.prototype.read = function () {
+  if (this.primary) {
+    if (!this.proxy) {
+      this.createProxyElement ();
+    }
+
+    document.body.appendChild (this.proxy);
+    this.proxy.focus ();
+
+    try {
+      var res = document.execCommand ("paste");
+      console.log("pasted:", this.proxy.value, res);
+    } catch (err) {
+      console.error ("Unable to paste text from clipboard:", err);
+    }
+
+    this.content = this.proxy.value;
+    this.proxy.value = "";
+    document.body.removeChild (this.proxy);
+  }
+
+  return this.content;
+};
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
+/**
  * Represents a selection for a cursor.
  *
  * @constructor
@@ -1212,6 +1308,12 @@ var EditorCursor = function (store, id, primary) {
    * @type {EditorSelection}
    */
   this.selection = null;
+
+  /**
+   * The clipboard for this cursor
+   * @type {EditorClipboard}
+   */
+  this.clipboard = new EditorClipboard (primary);
 
   /**
    * The line position of this cursor has changed
@@ -1675,6 +1777,41 @@ EditorCursor.prototype.removeSelection = function () {
   }
 };
 
+EditorCursor.prototype.deleteSelected = function () {
+  if (this.selection) {
+    this.store.removeSelection (this.selection);
+  }
+};
+
+EditorCursor.prototype.copySelected = function (cut) {
+  if (this.selection) {
+    var lines = this.store.acquireSelectionContent (this.selection);
+    this.clipboard.write (lines.join ('\n'));
+
+    if (cut) {
+      this.deleteSelected ();
+    }
+  }
+};
+
+EditorCursor.prototype.paste = function () {
+  var content = this.clipboard.read ();
+  console.log ("paste content:", content);
+
+  if (content.indexOf ('\n') === -1) {
+    this.insertText (content);
+  } else {
+    var lines = this.clipboard.read ().split ('\n');
+    for (var index = 0; i < lines.length; i++) {
+      this.insertText (lines[index]);
+      if (index < lines.length - 1) {
+        this.insertLine ();
+      }
+    }
+  }
+};
+
+
 /**
  * Test if the cursor is next to an encapsulator
  */
@@ -2096,18 +2233,16 @@ EditorKeymap.prototype.onKeyEvent = function (mode, event) {
     const mappings = this.mappingTable[event.key];
     for (var i = 0; i < mappings.length; i++) {
       if (mappings[i].matchesEvent (mode, event)) {
-        if (mappings[i].command (store, event)) {
-          return true;
-        }
+        mappings[i].command (store, event);
+        return true;
       }
     }
   }
 
   for (var i = 0; i < this.mappings.length; i++) {
     if (this.mappings[i].matchesEvent (mode, event)) {
-      if (this.mappings[i].command (store, event)) {
-        return true;
-      }
+      this.mappings[i].command (store, event);
+      return true;
     }
   }
 
@@ -2148,54 +2283,41 @@ EditorKeymap.defaultKeymap = [
     store.cursors.forEach (function (cursor) {
       cursor.moveLeft (1, event.shiftKey);
     });
-
-    return true;
   }),
 
   new EditorKeymap.Mapping ("down", "ArrowRight", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
       cursor.moveRight (1, event.shiftKey);
     });
-
-    return true;
   }),
 
   new EditorKeymap.Mapping ("down", "ArrowUp", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
       cursor.moveUp (1, event.shiftKey);
     });
-
-    return true;
   }),
 
   new EditorKeymap.Mapping ("down", "ArrowDown", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
       cursor.moveDown (1, event.shiftKey);
     });
-
-    return true;
   }),
 
   new EditorKeymap.Mapping ("down", "Home", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
       cursor.moveStart (event.shiftKey);
     });
-
-    return true;
   }),
 
   new EditorKeymap.Mapping ("down", "End", null, false, false, false, function (store, event) {
     store.cursors.forEach (function (cursor) {
       cursor.moveEnd (event.shiftKey);
     });
-
-    return true;
   }),
 
   new EditorKeymap.Mapping ("down", "Home", false, true, false, false, function (store, event) {
     store.cursors.removeSecondary ();
     store.cursors.primary.setLocation ({ line: 0, column: 0 });
-    return true;
   }),
 
   new EditorKeymap.Mapping ("down", "End", false, true, false, false, function (store, event) {
@@ -2208,8 +2330,6 @@ EditorKeymap.defaultKeymap = [
       store.cursors.removeSecondary ();
       store.cursors.primary.setLocation ({ line: 0, column: 0 });
     }
-
-    return true;
   }),
 
   /*
@@ -2220,69 +2340,78 @@ EditorKeymap.defaultKeymap = [
     var lowest = store.cursors.getCursorOnLowestLine ();
     var cursor = lowest.clone ();
     cursor.moveUp (1, false);
-    return true;
   }),
 
   new EditorKeymap.Mapping ("down", "ArrowDown", true, true, false, false, function (store, event) {
     var highest = store.cursors.getCursorOnHighestLine ();
     var cursor  = highest.clone ();
     cursor.moveDown (1, false);
-    return true;
   }),
 
   new EditorKeymap.Mapping ("down", "Escape", false, false, false, false, function (store, event) {
     store.cursors.removeSecondary ();
     store.cursors.primary.removeSelection ();
-    return true;
   }),
 
   /*
    * Character Input
    */
 
-   new EditorKeymap.Mapping ("down", function (event) {
-     if (event.key.length === 1) {
-      return event.key.match (/(\w|\s|[-\|\[\]{}_=+;:'@#~,<.>\/\\?\!"£$%^&*()])/g);
-     } else return false;
-   }, null, false, false, false, function (store, event) {
-     store.cursors.forEach (function (cursor) {
-       cursor.insertText (event.key);
-     });
+  new EditorKeymap.Mapping ("down", function (event) {
+    if (event.key.length === 1) {
+    return event.key.match (/(\w|\s|[-\|\[\]{}_=+;:'@#~,<.>\/\\?\!"£$%^&*()])/g);
+    } else return false;
+  }, null, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.insertText (event.key);
+    });
+  }),
 
-     return true;
-   }),
+  new EditorKeymap.Mapping ("down", "Backspace", null, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.deleteBackwards (1);
+    });
+  }),
 
-   new EditorKeymap.Mapping ("down", "Backspace", null, false, false, false, function (store, event) {
-     store.cursors.forEach (function (cursor) {
-       cursor.deleteBackwards (1);
-     });
+  new EditorKeymap.Mapping ("down", "Delete", false, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.deleteForwards (1);
+    });
+  }),
 
-     return true;
-   }),
+  new EditorKeymap.Mapping ("down", "Enter", null, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.insertLine ();
+    });
+  }),
 
-   new EditorKeymap.Mapping ("down", "Delete", false, false, false, false, function (store, event) {
-     store.cursors.forEach (function (cursor) {
-       cursor.deleteForwards (1);
-     });
+  new EditorKeymap.Mapping ("down", "Tab", false, false, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.insertTab ();
+    });
+  }),
 
-     return true;
-   }),
+  /*
+   * Clipboard Interaction
+   */
 
-   new EditorKeymap.Mapping ("down", "Enter", null, false, false, false, function (store, event) {
-     store.cursors.forEach (function (cursor) {
-       cursor.insertLine ();
-     });
+  new EditorKeymap.Mapping ("down", "c", false, true, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.copySelected ();
+    });
+  }),
 
-     return true;
-   }),
+  new EditorKeymap.Mapping ("down", "x", false, true, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.copySelected (true);
+    });
+  }),
 
-   new EditorKeymap.Mapping ("down", "Tab", false, false, false, false, function (store, event) {
-     store.cursors.forEach (function (cursor) {
-       cursor.insertTab ();
-     });
-
-     return true;
-   }),
+  new EditorKeymap.Mapping ("down", "v", false, true, false, false, function (store, event) {
+    store.cursors.forEach (function (cursor) {
+      cursor.paste ();
+    });
+  }),
 ];
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
@@ -2734,39 +2863,6 @@ EditorSyntaxEngine.prototype.highlightLines = function (lines, start_state, tab_
   var regions = [];
   for (var i = 0; i < lines.length; i++) {
     regions.push (this.highlightLine (lines[i], null, tab_size).regions);
-    // const line       = lines[i];
-    // const length     = line.length;
-    // var   region     = new EditorSyntaxEngine.SyntaxRegionCollection ();
-    // var   last_index = 0;
-
-    // while (last_index < length) {
-    //   const char = line[last_index];
-    //   const code = char.codePointAt (0);
-
-    //   if (code === 0x09) { /* tab */
-    //     for (var t = 0; t < tab_size; t++) {
-    //       region.appendCodePoint ("whitespace", 0x20);
-    //     }
-
-    //     last_index++;
-    //   } else if (/\s/.test (char)) {
-    //     region.appendCodePoint ("whitespace", code);
-    //     last_index++;
-    //   } else {
-    //     var result = this.match (line, last_index);
-    //     if (result) {
-    //       region.appendString (result.style, line.substring (last_index, last_index + result.length));
-    //       last_index += result.length;
-    //     } else {
-    //       region.appendCodePoint (this.getStateStyle () || "plain", code);
-    //       last_index++;
-    //     }
-    //   }
-    // }
-
-    // region.finish ();
-    // regions.push (region.regions);
-    // this.matchEOL ();
   }
 
   return regions;
@@ -2809,7 +2905,7 @@ EditorSyntaxEngine.JavaScript = {
 
       {
         name:  "reserved_word",
-        expr:  /^(var|function|new|this|typeof|true|false|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|switch|case|while|do|instanceof|const)\b/,
+        expr:  /^(var|function|new|this|typeof|true|false|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|switch|case|default|while|do|instanceof|const)\b/,
         style: "reserved_word"
       },
 
