@@ -2,15 +2,43 @@
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * A simple event object.
+ *
+ * Events can have callbacks attached and detached to them. Each callback can have an
+ * optional binding object. When fired, the callbacks are executed in turn.
+ *
+ * @constructor
+ * @param {string} [name] The name of the event
+ */
 var EditorEvent = function (name) {
   this.name     = name || "<unknown event>";
   this.handlers = [];
+  this.suspend  = 0;
 };
 
+/**
+ * Attach a callback to this event.
+ *
+ * The callback will be called when the {@link EditorEvent#fire} method is called
+ * and will be passed the arguments that are passed to `fire`.
+ *
+ * @param {function} cb The callback to attach to this event
+ */
 EditorEvent.prototype.bind = function (cb) {
   this.bindTo (null, cb);
 };
 
+/**
+ * Attach a callback with a given binding object to this event.
+ *
+ * The callback will be called when the {@link EditorEvent#fire} method is called
+ * and will be bound (via `Function.prototype.bind`) to the given object. The arguments
+ * that were passed to `fire` will be passed as arguments to the callback.
+ *
+ * @param {object} binding The object to bind the callback to
+ * @param {function} cb The callback to attach to this event
+ */
 EditorEvent.prototype.bindTo = function (binding, cb) {
   if (typeof cb !== "function") {
     throw new TypeError ("Expected second argument to bindTo() to be a function");
@@ -19,18 +47,49 @@ EditorEvent.prototype.bindTo = function (binding, cb) {
   this.handlers.push ({ callback: cb, binding: binding });
 };
 
+/**
+ * Detach a callback from this event.
+ *
+ * Any callback attached to this event that have the given callback function
+ * (regardless of binding object) will be detached and will no longer be called.
+ *
+ * @param {function} cb The callback to unattach.
+ */
 EditorEvent.prototype.unbind = function (cb) {
   this.handlers = this.handlers.filter (function (handler) {
     return handler.callback === cb;
   });
 };
 
+/**
+ * Detach a callback and binding object from this event.
+ *
+ * Any callback attached to this event that has the given binding object (and
+ * optionally the given function) will be detached from this event and will no
+ * longer be called.
+ *
+ * @param {object} binding The binding object that is to be detached
+ * @param {*} [cb]         Optional callback function to detach
+ */
 EditorEvent.prototype.unbindFrom = function (binding, cb) {
   this.handlers = this.handlers.filter (function (handler) {
     return !(handler.binding === binding && (typeof cb === "undefined" || handler.callback === cb));
   });
 };
 
+/**
+ * Fire this event.
+ *
+ * This will call all the callbacks attached to this event, bound to their
+ * associated binding object (if any).
+ *
+ * The arguments that are passed to this method will be passed to each attached
+ * callback.
+ *
+ * If an exception is thrown in the call to an attached callback function then
+ * this will be reported to the console and the event will continue to call
+ * subsequent callbacks.
+ */
 EditorEvent.prototype.fire = function () {
   const args = Array.prototype.slice.call (arguments, [0]);
 
@@ -45,14 +104,49 @@ EditorEvent.prototype.fire = function () {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * A collection of useful functions used throughout the editor.
+ * @namespace
+ */
 var EditorTools = {};
 
+/**
+ * Convert the given object to a classname suitable for React `className` property.
+ *
+ * The properties of the object (accessed via `Object.keys`) are tested for truthiness. If
+ * a property's value is non-false then the name of the property is added to the returned
+ * classname.
+ *
+ * @example
+ * EditorTools.classSet ({
+ *   first:           true,
+ *   second:          false,
+ *   "another-class": true
+ * });
+ * // result: "first another-class"
+ *
+ * @param {object} obj The object to convert to a classname
+ * @returns {string}
+ */
 EditorTools.classSet = function (obj) {
   return Object.keys (obj).filter (function (key) {
     return obj[key];
   }).join (' ');
 };
 
+/**
+ * Join up all arguments to the function into a single classname suitable for React `className` property.
+ *
+ * Each argument to the function is appended to the gathered classname if it is either
+ * a `string` or it is an `object`. In the case of an `object` then the argument is
+ * passed to {@see EditorTools.classSet} to extract the properties from the object.
+ *
+ * @example
+ * EditorTools.joinClasses ("first", { second: false, "another-class": true });
+ * // result: "first another-class"
+ *
+ * @returns {string}
+ */
 EditorTools.joinClasses = function () {
   var result = [];
 
@@ -75,6 +169,34 @@ EditorTools.joinClasses = function () {
   return result.join (' ');
 };
 
+/**
+ * Bind a callback to a DOM element event.
+ *
+ * This function is useful when you want to listen for events on an element
+ * that is not actively controlled by React. For instance when we are handling
+ * drag operations, we routinely only listen on the React element for `mousedown`
+ * events. Then we bind the `mousemove` and `mouseup` events to the `document`
+ * element to make sure that we handle movement outside of the element being dragged.
+ *
+ * @example
+ * // Find an element in the document
+ * var element = document.querySelector (".my-class");
+ * // Listen to the 'click' event on the element
+ * var remover = EditorTools.listen (element, "click", function (event) {
+ *   // Write a message to the console and then remove the event
+ *   console.log ("Clicked on the element; now removing");
+ *   remover ();
+ * });
+ *
+ * // Clicking on the first element matching the `.my-class` selector will
+ * // write a message to the console. Subsequent clicks will perform no action.
+ *
+ * @param {Element}  target    The element to bind this event to
+ * @param {string}   eventType The name of the event
+ * @param {function} callback  The callback to bind to the event
+ *
+ * @returns {function} A function that unbinds the callback from the given event.
+ */
 EditorTools.listen = function (target, eventType, callback) {
   if (target.addEventListener) {
     target.addEventListener (eventType, callback, false);
@@ -91,6 +213,22 @@ EditorTools.listen = function (target, eventType, callback) {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * A numeric ID generator.
+ *
+ * The result of this constructor is actually a function. Repeated calls to the
+ * function will yield an ever incrementing integer. This can be used as a source
+ * for simple unique IDs.
+ *
+ * @example
+ * var next_id = new EditorIdGenerator ();
+ * var first   = next_id ();
+ * var second  = next_id ();
+ *
+ * // At this point 'first' will be 0 and 'second' will be 1.
+ *
+ * @constructor
+ */
 var EditorIdGenerator = function () {
   var next_id = 0, func = function () {
     return next_id++;
@@ -101,23 +239,65 @@ var EditorIdGenerator = function () {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * A row and column position in the editor.
+ *
+ * @constructor
+ * @param {number} line
+ * @param {number} column
+ */
 var EditorPosition = function (line, column) {
+  /**
+   * @type number
+   */
   this.line   = line;
+
+  /**
+   * @type number
+   */
   this.column = column;
 };
 
+/**
+ * Create an new position that has the same row and column as this one.
+ * @returns {EditorPosition}
+ */
 EditorPosition.prototype.clone = function () {
   return new EditorPosition (this.line, this.column);
 };
 
+/**
+ * Return a string representation of the position.
+ *
+ * @example
+ * new EditorPosition (10, 100).toString ();
+ * // result: "(10:100)"
+ *
+ * @returns {string}
+ */
 EditorPosition.prototype.toString = function () {
   return "(" + this.line + ":" + this.column + ")";
 };
 
+/**
+ * Test if this position is equal to another.
+ *
+ * @param {EditorPosition} other The position to test against
+ * @returns {boolean} Whether the two positions are equal
+ */
 EditorPosition.prototype.equals = function (other) {
   return other.line === this.line && other.column === this.column;
 };
 
+/**
+ * Test if this position is before the argument position.
+ *
+ * Where "before" means that it is either on a previous line or, if on the
+ * same line, on a previous column.
+ *
+ * @param {EditorPosition} other
+ * @returns {boolean} Whether this position is before the argument position
+ */
 EditorPosition.prototype.isBefore = function (other) {
   if (this.line < other.line) {
     return true;
@@ -130,6 +310,15 @@ EditorPosition.prototype.isBefore = function (other) {
   return this.column < other.column;
 };
 
+/**
+ * Test if this position is before or equal to the argument position.
+ *
+ * That is, this position is either on a previous line or, if on the same
+ * line, on a previous or equal column.
+ *
+ * @param {EditorPosition} other
+ * @returns {boolean} Whether this position is before the argument position
+ */
 EditorPosition.prototype.isBeforeOrEqual = function (other) {
   if (this.line < other.line) {
     return true;
@@ -144,14 +333,42 @@ EditorPosition.prototype.isBeforeOrEqual = function (other) {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * A range in the editor.
+ *
+ * A range is described by a start line and column and an end line and column.
+ *
+ * @constructor
+ * @param {number} start_line
+ * @param {number} start_col
+ * @param {number} end_line
+ * @param {number} end_col
+ */
 var EditorRange = function (start_line, start_col, end_line, end_col) {
   this.set (start_line, start_col, end_line, end_col);
 };
 
+/**
+ * Return a string representation of the range.
+ *
+ * @example
+ * new EditorRange (1, 100, 2, 4).toString ();
+ * // result: "[1:100,2:4]"
+ *
+ * @returns {string}
+ */
 EditorRange.prototype.toString = function () {
   return "[" + this.start_line + ":" + this.start_column + "," + this.end_line + ":" + this.end_column + "]";
 };
 
+/**
+ * Set this range to the given arguments.
+ *
+ * @param {number} start_line
+ * @param {number} start_col
+ * @param {number} end_line
+ * @param {number} end_col
+ */
 EditorRange.prototype.set = function (start_line, start_col, end_line, end_col) {
   if ((start_line > end_line) || (start_line === end_line && start_col > end_col)) {
     this.start_line   = end_line;
@@ -166,40 +383,125 @@ EditorRange.prototype.set = function (start_line, start_col, end_line, end_col) 
   }
 };
 
+/**
+ * Create an empty range from the given position. The start and end of the returned range
+ * are the same position.
+ *
+ * @param {EditorPosition} position The position to create a range from
+ * @returns {EditorRange}
+ */
 EditorRange.fromPosition = function (position) {
   return new EditorRange (position.line, position.column, position.line, position.column);
 };
 
+/**
+ * Get the start row and column of this range as an `EditorPosition`.
+ * @returns {EditorPosition}
+ */
 EditorRange.prototype.getStartLocation = function () {
   return new EditorPosition (this.start_line, this.start_column);
 };
 
+/**
+ * Get the end row and column of this range as an `EditorPosition`.
+ * @returns {EditorPosition}
+ */
 EditorRange.prototype.getEndLocation = function () {
   return new EditorPosition (this.end_line, this.end_column);
 };
 
+/**
+ * Set the start location of this range.
+ * @param {EditorPosition} location
+ */
 EditorRange.prototype.setStartLocation = function (location) {
   this.start_line   = location.line;
   this.start_column = location.column;
 };
 
+/**
+ * Set the end location of this range.
+ * @param {EditorPosition} location
+ */
 EditorRange.prototype.setEndLocation = function (location) {
   this.end_line   = location.line;
   this.end_column = location.column;
 };
 
+/**
+ * Test whether this range contains the given position
+ * @param {EditorPosition} location
+ * @returns {boolean} Whether the location is contained within the range
+ */
+EditorRange.prototype.contains = function (location) {
+  if (location.line < this.start_line || location.line > this.end_line) {
+    return false;
+  }
+
+  if (location.line == this.start_line && location.column < this.start_column) {
+    return false;
+  }
+
+  if (location.line == this.end_line && location.column > this.end_column) {
+    return false;
+  }
+
+  return true;
+};
+
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * An RGB color.
+ *
+ * @constructor
+ * @param {number} r The red component
+ * @param {number} g The green component
+ * @param {number} b The blue component
+ */
 var EditorColor = function (r, g, b) {
+  /**
+   * The red component.
+   * @type number
+   */
   this.r = r;
+
+  /**
+   * The green component.
+   * @type number
+   */
   this.g = g;
+
+  /**
+   * The blue component.
+   * @type number
+   */
   this.b = b;
 };
 
+/**
+ * A regular expression to match 3-digit hexadecimal colors of the form `#123`.
+ * @type RegExp
+ */
 EditorColor.HEX3_RE = /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/;
+
+/**
+ * A regular expression to match 6-digit hexadecimal colors of the form `#1a2b3c`.
+ * @type RegExp
+ */
 EditorColor.HEX6_RE = /^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/;
+
+/**
+ * A regular expression to match RGB colors of the form `rgb (123, 456, 789)`.
+ * @type RegExp
+ */
 EditorColor.RGB_RE  = /^rgb\s*\(([0-9]+)\s*,\s*([0-9]+)\s*,\s*([0-9]+)\s*\)$/;
 
+/**
+ * Parse the given string as a three- or six-digit hexadecimal color
+ * @param {string} str The string to parse
+ * @returns {EditorColor}
+ */
 EditorColor.fromHex = function (str) {
   var result = EditorColor.HEX3_RE.exec (str);
   if (result) {
@@ -218,6 +520,11 @@ EditorColor.fromHex = function (str) {
   }
 };
 
+/**
+ * Parse the given string as an RGB color
+ * @param {string} str The string to parse
+ * @returns {EditorColor}
+ */
 EditorColor.fromRGB = function (str) {
   var result = EditorColor.RGB_RE.exec (str);
   if (result) {
@@ -229,22 +536,104 @@ EditorColor.fromRGB = function (str) {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * Encapsulates the theme colours for the editor.
+ *
+ * This class contains the colours that we extract from the editor DOM under the active CSS
+ * theme. These colour values are then used when rendering non-CSS-styled elements such as
+ * the minimap.
+ *
+ * @constructor
+ */
 var EditorThemeColors = function () {
+  /**
+   * The editor background color
+   * @type {EditorColor}
+   * @default "#000"
+   */
   this.background            = EditorColor.fromHex ("#000");
+
+  /**
+   * Whitespace colour
+   * @type {EditorColor}
+   * @default "#fff"
+   */
   this.whitespace            = EditorColor.fromHex ("#fff");
+
+  /**
+   * Plain text colour
+   * @type {EditorColor}
+   * @default "#fff"
+   */
   this.plain                 = EditorColor.fromHex ("#fff");
+
+  /**
+   * Comment colour
+   * @type {EditorColor}
+   * @default "#fff"
+   */
   this.comment               = EditorColor.fromHex ("#fff");
+
+  /**
+   * Reserved word color
+   * @type {EditorColor}
+   * @default "#fff"
+   */
   this.reserved_word         = EditorColor.fromHex ("#fff");
+
+  /**
+   * Identifier colour
+   * @type {EditorColor}
+   * @default "#fff"
+   */
   this.identifier            = EditorColor.fromHex ("#fff");
+
+  /**
+   * Typename colour
+   * @type {EditorColour}
+   * @default "#fff"
+   */
   this.type_name             = EditorColor.fromHex ("#fff");
+
+  /**
+   * String literal colour
+   * @type {EditorColor}
+   * @default "#fff"
+   */
   this.string_literal        = EditorColor.fromHex ("#fff");
+
+  /**
+   * String literal escape code colour
+   * @type {EditorColor}
+   * @default "#fff"
+   */
   this.string_literal_escape = EditorColor.fromHex ("#fff");
+
+  /**
+   * Number colour
+   * @type {EditorColor}
+   * @default "#fff"
+   */
   this.number                = EditorColor.fromHex ("#fff");
+
+  /**
+   * Regular expression colour
+   * @type {EditorColor}
+   * @default "#fff"
+   */
   this.regexp                = EditorColor.fromHex ("#fff");
 
+  /**
+   * The theme colours have changed.
+   * @event EditorThemeColors#Changed
+   */
   this.Changed = new EditorEvent ("EditorThemeColors.Changed");
 };
 
+/**
+ * Extract theme colours from the DOM.
+ * @param {Element} lines The element within the editor DOM that encapsulates the lines
+ */
 EditorThemeColors.prototype.extractFromDOM = function (lines) {
   var faux_line = document.createElement ("div");
   faux_line.className     = "line";
@@ -278,40 +667,118 @@ EditorThemeColors.prototype.extractFromDOM = function (lines) {
   this.onChanged ();
 };
 
+/**
+ * Called when the theme colours have changed.
+ * @fires EditorThemeColors#Changed
+ */
 EditorThemeColors.prototype.onChanged = function () {
   this.Changed.fire ();
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * @constructor
+ */
 var EditorLineMarker = function () {
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
-var EditorLine = function (store, index, content) {
+/**
+ * @constructor
+ * @param {EditorStore} store       The store to which this line belongs
+ * @param {number}      index       The index of the line (i.e. zero-based line number)
+ * @param {string}      content     The content of the line
+ * @param {boolean}     [no_update] If true, the constructor will not update information
+ */
+var EditorLine = function (store, index, content, no_update) {
+  /** The ID of this line
+   * @type {number}
+   */
   this.id            = store.nextLineId ();
+
+  /** The store to which this line belongs
+   * @type {EditorStore}
+   */
   this.store         = store;
+
+  /** The index of the line (i.e. zero-based line number)
+   * @type {number}
+   */
   this.index         = index;
+
+  /** The content of the line
+   * @type {string}
+   */
   this.content       = content;
+
+  /** The indentation of this line
+   * @see {@link EditorLine#updateIndent}
+   * @type {number}
+   */
   this.indent        = 0;
+
+  /** The gutter marker for this line.
+   * @type {EditorLineMarker}
+   * @default null
+   */
   this.marker        = null;
 
   this.syntaxIn      = 0;     /* syntax state entering line */
   this.syntaxOut     = 0;     /* syntax state exiting line */
-  this.syntax        = store.config.syntax === null ? null : new EditorSyntaxEngine (store.config.syntax);
 
+  /** The rendered content of this line
+   * @type {string}
+   * @see {@link EditorLine#computeRender}
+   */
   this.render        = "";
+
+  /**
+   * The render elements of this line
+   * @type {EditorSyntaxEngine.SyntaxRegion[]}
+   * @see {@link EditorLine#computeRender}
+   */
   this.elements      = [];
 
+  /**
+   * The content of this line has changed.
+   * @event EditorLine#ContentChanged
+   * @type {EditorEvent}
+   */
   this.ContentChanged = new EditorEvent ("EditorLine.ContentChanged");
+
+  /**
+   * The gutter marker for this line has changed.
+   * @event EditorLine#MarkerChanged
+   * @type {EditorEvent}
+   */
   this.MarkerChanged  = new EditorEvent ("EditorLine.MarkerChanged");
+
+  /**
+   * The line has been clicked on.
+   * @event EditorLine#Clicked
+   * @type {EditorEvent}
+   */
   this.Clicked        = new EditorEvent ("EditorLine.Clicked");
 
-  this.updateIndent ();
-  this.computeRender ();
+  if (!no_update) {
+    this.updateIndent ();
+    this.computeRender ();
+  }
 };
 
+/**
+ * Set the content of the line to a new value.
+ *
+ * This will update the indentation information for the line (via {@link EditorLine#updateIndent})
+ * and also the render information (via {@link EditorLine#computeRender}), which may result in
+ * subsequent lines being updated (see {@link EditorLine#computeRender} for more information).
+ *
+ * @param {string} content The new content for the line
+ * @fires EditorLine#ContentChanged
+ * @fires EditorStore#LineContentChanged
+ */
 EditorLine.prototype.setContent = function (content) {
   if (content !== this.content) {
     this.content = content;
@@ -321,14 +788,34 @@ EditorLine.prototype.setContent = function (content) {
   }
 };
 
+/**
+ * Return the text content of this line from the given start column.
+ * @param {number} index The start column
+ * @returns {string}
+ */
 EditorLine.prototype.getTextFrom = function (index) {
   return this.content.slice (index);
 };
 
+/**
+ * Appends the given text to the line.
+ *
+ * @param {string} text Text to append to this line
+ * @fires EditorLine#ContentChanged
+ * @fires EditorStore#LineContentChanged
+ */
 EditorLine.prototype.appendText = function (text) {
   this.setContent (this.content + text);
 };
 
+/**
+ * Insert text at the given index.
+ *
+ * @param {number} index The index at which to insert the text
+ * @param {string} text  The text to insert at that index
+ * @fires EditorLine#ContentChanged
+ * @fires EditorStore#LineContentChanged
+ */
 EditorLine.prototype.insertText = function (index, text) {
   if (index === this.content.length) {
     this.setContent (this.content + text);
@@ -337,22 +824,52 @@ EditorLine.prototype.insertText = function (index, text) {
   }
 };
 
+/**
+ * Deletes a number of characters at the given index.
+ *
+ * @param {number} index The index at which to start deleting
+ * @param {number} count The number of characters to delete
+ * @fires EditorLine#ContentChanged
+ * @fires EditorStore#LineContentChanged
+ */
 EditorLine.prototype.deleteText = function (index, count) {
   this.setContent (this.content.slice (0, index) + this.content.slice (index + count));
 };
 
+/**
+ * Delete all text from the given index forward.
+ *
+ * @param {number} index The index to start deleting from
+ * @fires EditorLine#ContentChanged
+ * @fires EditorStore#LineContentChanged
+ */
 EditorLine.prototype.deleteTextFrom = function (index) {
   this.setContent (this.content.slice (0, index));
 };
 
+/**
+ * Test whether the line contains the given string or regular expression.
+ *
+ * @param {string|RegExp} what String or regular expression to test
+ * @returns {boolean} Whether the line contains the given value
+ */
 EditorLine.prototype.contains = function (what) {
   if (typeof what === "string") {
     return this.content.indexOf (what) !== -1;
   } else if (what instanceof RegExp) {
     return what.exec (this.content) !== null;
-  }
+  } else return false;
 };
 
+/**
+ * Test whether the line contains the given string or regular expression in the
+ * given range.
+ *
+ * @param {string|RegExp} what  String or regular expression to test
+ * @param {number}        start Start index
+ * @param {number}        end   End index
+ * @returns {boolean} whether the sub-range contains the given value
+ */
 EditorLine.prototype.containsInRange = function (what, start, end) {
   var in_range = this.content.substr (start, end - start);
   if (typeof what === "string") {
@@ -362,23 +879,48 @@ EditorLine.prototype.containsInRange = function (what, start, end) {
   }
 };
 
+/**
+ * Returns the length of the line (in characters).
+ * @returns {number} The length of the line (in characters)
+ */
 EditorLine.prototype.getLength = function () {
   return this.content.length;
 };
 
+/**
+ * Queries the {@see EditorStore} for the previous line.
+ * @returns {EditorLine} The previous line (or `null`)
+ */
 EditorLine.prototype.getPrevious = function () {
   return this.store.lines[this.index - 1] || null;
 };
 
+/**
+ * Queries the {@see EditorStore} for the next line.
+ * @returns {EditorLine} The next line (or `null`)
+ */
 EditorLine.prototype.getNext = function () {
   return this.store.lines[this.index + 1] || null;
 };
 
+/**
+ * Set the gutter marker for this line.
+ * @param {EditorMarker} marker The new marker for the line
+ * @fires EditorLine#MarkerChanged
+ */
 EditorLine.prototype.setMarker = function (marker) {
   this.marker = marker;
   this.onMarkerChanged ();
 };
 
+/**
+ * Clears the gutter marker for this line.
+ *
+ * Note that this will only fire the {@see event:EditorLine#MarkerChanged} event if
+ * the line currently has a gutter marker set.
+ *
+ * @fires EditorLine#MarkerChanged
+ */
 EditorLine.prototype.clearMarker = function () {
   if (this.marker !== null) {
     this.marker = null;
@@ -386,25 +928,48 @@ EditorLine.prototype.clearMarker = function () {
   }
 };
 
+/**
+ * Set this line as the active line.
+ *
+ * This will remove any secondary cursors and set the primary cursor
+ * to this line.
+ *
+ * @see {@link EditorCursorCollection#removeSecondary}
+ * @see {@link EditorCursor#setLine}
+ */
 EditorLine.prototype.setActive = function () {
   this.store.cursors.removeSecondary ();
   this.store.cursors.primary.setLine (this.index);
 };
 
+/**
+ * Update the `indent` property of this line by examining the space characters
+ * at the start of the line content.
+ */
 EditorLine.prototype.updateIndent = function () {
   var res = /^\s*/.exec (this.content);
   this.indent = res ? res[0].length : 0;
 };
 
+/**
+ * Perform syntax rendering using the syntax engine assigned to the parent {@link EditorStore}.
+ *
+ * This will update the `elements` and `render` properties of the line.
+ *
+ * Note that if this is not the last line in the editor, and the state of the syntax highlight
+ * engine ({@link EditorSyntaxEngine}) is not the same as the start state of the next line, then
+ * the `computeRender` method is called on the next line automatically. This will also result
+ * in the firing of the changed events for the next line (via {@link EditorLine#onContentChanged}).
+ * The purpose of this is to make sure that if the syntax highlighter finishes this line in a
+ * different state to when it started processing the previous line, the previous line is also
+ * rendered. This ensures that changes to the state of the syntax engine cascade through the lines.
+ * This is important when, for example, dealing with block-comments: when we have changed the content
+ * of this line such that a block comment starts we need to cascade this style onto the subsequent
+ * lines.
+ */
 EditorLine.prototype.computeRender = function () {
-  const ESCAPED    = { '&': "&amp;", '<': "&lt;", '>': "&gt;" };
-
-  var length     = this.content.length;
-  var tab_size   = this.store.config.tabSize;
-  var syntax     = this.syntax;
-  var elements   = [];
-  var current    = { style: null, start: 0, end: -1, length: 0, original: "", chars: "" };
-  var last_index = 0;
+  const tab_size = this.store.config.tabSize;
+  const syntax   = this.store.syntaxEngine;
 
   if (syntax) {
     var prev_line = this.getPrevious ();
@@ -417,109 +982,17 @@ EditorLine.prototype.computeRender = function () {
       syntax.state = 0;
       this.syntaxIn = 0;
     }
-  }
 
-  function submit_current () {
-    current.end    = last_index;
-    current.length = last_index - current.start;
-
-    elements.push (current);
-    current = { style: null, start: last_index, end: -1, length: 0, original: "", chars: "" };
-  }
-
-  function append_to_current (style, escaped, what) {
-    var chars, original;
-
-    if (typeof what === "number") {
-      if (!escaped) {
-        if (what === 0x3c) {
-          chars    = "&lt;";
-          original = "<";
-        } else if (what === 0x3e) {
-          chars    = "&gt;";
-          original = ">";
-        } else if (what === 0x26) {
-          chars    = "&amp;";
-          original = "&";
-        } else {
-          chars = original = String.fromCodePoint (what);
-        }
-      } else {
-        chars = original = String.fromCodePoint (what);
-      }
-    } else if (typeof what === "string") {
-      if (escaped) {
-        chars = original = what;
-      } else {
-        original = what;
-        chars    = what.replace (/[&<>]/g, function (c) {
-          return ESCAPED[c];
-        });
-      }
-    } else {
-      throw new Error ("Expected either number (codepoint) or string; found " + typeof what);
-    }
-
-    if (current.style === null) {
-      current.style     = style;
-      current.chars    += chars;
-      current.original += original;
-    } else if (current.style !== style) {
-      submit_current ();
-
-      current.style    = style;
-      current.chars    = chars;
-      current.original = original;
-    } else {
-      current.chars    += chars;
-      current.original += original;
-    }
-  }
-
-  var whitespaceRE = /\s/;
-  var in_indent    = true;
-
-  while (last_index < length) {
-    var char = this.content[last_index];
-    var code = char.codePointAt (0);
-
-    if (code === 0x09) { /* tab */
-      for (var i = 0; i < tab_size; i++) {
-        append_to_current ("whitespace", true, '&nbsp;');
-      }
-
-      last_index++;
-    } else if (code === 0x20) { /* space */
-      append_to_current ("whitespace", true, '&nbsp;');
-      last_index++;
-    } else if (whitespaceRE.test (char)) {
-      append_to_current ("whitespace", true, '&nbsp;');
-      last_index++;
-    } else {
-      var result = syntax ? syntax.match (this.content, last_index) : null;
-      if (result) {
-        /* We've matched a syntax rule and got back a descriptor with a style and match length */
-        append_to_current (result.style, false, this.content.substring (last_index, last_index + result.length));
-        last_index += result.length;
-      } else {
-        /* We've not matched anything, so get the default style of our current syntax state */
-        append_to_current ((syntax ? syntax.getStateStyle () : null) || "plain", false, char);
-        last_index++;
-      }
-    }
-  }
-
-  if (current.chars.length > 0) {
-    submit_current ();
-  }
-
-  /* Pass the "end of line" into the syntax engine */
-  if (syntax) {
-    syntax.matchEOL ();
+    var regions = syntax.highlightLine (this.content, null, tab_size);
+    this.elements = regions.regions;
+  } else {
+    var region = new EditorSyntaxEngine.SyntaxRegion (0);
+    region.appendString ("plain", this.content);
+    this.elements = [region];
   }
 
   var builder = [];
-  elements.forEach (function (element) {
+  this.elements.forEach (function (element) {
     builder.push ("<span");
 
     if (element.style) {
@@ -529,12 +1002,11 @@ EditorLine.prototype.computeRender = function () {
     }
 
     builder.push (">");
-    builder.push (element.chars);
+    builder.push (element.escaped);
     builder.push ("</span>");
   });
 
-  this.elements = elements;
-  this.render   = builder.join ('');
+  this.render = builder.join ('');
 
   if (syntax) {
     this.syntaxOut = syntax.state;
@@ -547,11 +1019,27 @@ EditorLine.prototype.computeRender = function () {
   }
 };
 
+/**
+ * Test the character at the given column to see if it is an encapsulator.
+ * @param {number} column The column to test
+ * @returns {boolean} Whether the character at the given column is an encapsulator
+ */
 EditorLine.prototype.isEncapsulatorAt = function (column) {
   var char = this.content[column];
   return char === '[' || char === ']' || char === '(' || char === ')' || char === '{' || char === '}';
 };
 
+/**
+ * Search backwards through this line to find an open encapsulator, starting at the
+ * given column index. This will also count any close encapsulators to ensure that
+ * the correct open encapsulator is found (rather than just the immediate first).
+ *
+ * This method will iterate over any previous lines if the open encapsulator could
+ * not be found in this line.
+ *
+ * @param {number} start_col The start column to work backwards from
+ * @returns {EditorPosition} The position of the previous open encapsulator (or `null`)
+ */
 EditorLine.prototype.getPreviousEncapsulator = function (start_col) {
   var line  = this;
   var count = 0;
@@ -576,6 +1064,17 @@ EditorLine.prototype.getPreviousEncapsulator = function (start_col) {
   return null;
 };
 
+/**
+ * Search forwards through this line to find a close encapsulator, starting at the
+ * given column index. This will also count any open encapsulators to ensure that
+ * the correct close encapsulator is found (rather than just the immediate first).
+ *
+ * This method will iterate over any subsequent lines if the close encapsulator could
+ * not be found in this line.
+ *
+ * @param {number} start_col The start column to work from
+ * @returns {EditorPosition} The position of the next close encapsulator (or `null`)
+ */
 EditorLine.prototype.getNextEncapsulator = function (start_col) {
   var line  = this;
   var count = 0;
@@ -600,26 +1099,71 @@ EditorLine.prototype.getNextEncapsulator = function (start_col) {
   return null;
 };
 
+/**
+ * When a method in this class changes the contents of the line that results in a requirement
+ * to re-render the display, this method is used to fire the {@link EditorLine#event:ContentChanged}
+ * event.
+ *
+ * In addition, this method will fire the {@link EditorStore#event:LineContentChanged} event
+ * via the {@link EditorStore#onLineContentChanged} to notify any listeners on the store that
+ * this line has had it's content modified.
+ *
+ * @fires EditorLine#ContentChanged
+ * @fires EditorStore#LineContentChanged
+ */
 EditorLine.prototype.onContentChanged = function () {
   this.ContentChanged.fire ();
   this.store.onLineContentChanged (this);
 };
 
+/**
+ * When the gutter marker for this line is modified and the display needs to be updated, this
+ * method is called, which will fire the {@link EditorLine#event:MarkerChanged} event.
+ *
+ * @fires EditorLine#MarkerChanged
+ */
 EditorLine.prototype.onMarkerChanged = function () {
   this.MarkerChanged.fire ();
 };
 
+/**
+ * When this line has been clicked upon this method is used to fire the {@link EditorLine#event:Clicked}
+ * event.
+ *
+ * @fires EditorLine#Clicked
+ */
 EditorLine.prototype.onClicked = function () {
   this.Clicked.fire ();
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * Represents a selection for a cursor.
+ *
+ * @constructor
+ * @param {EditorPosition} start The start position of the selection.
+ */
 var EditorSelection = function (start) {
+  /**
+   * The start position of the selection (not necessarily within the selection region)
+   * @type {EditorPosition}
+   */
   this.start  = start;
+
+  /**
+   * The region described by this selection
+   * @type {EditorRange}
+   */
   this.region = EditorRange.fromPosition (start);
 };
 
+/**
+ * Adjust this selection for the given location. Essentially expanding the
+ * selection forwards or backwards to include the given position.
+ *
+ * @param {EditorPosition} location The location to include in the selection
+ */
 EditorSelection.prototype.adjustForCursor = function (location) {
   if (location.isBeforeOrEqual (this.start)) {
     this.region.set (location.line, location.column, this.start.line, this.start.column);
@@ -630,19 +1174,89 @@ EditorSelection.prototype.adjustForCursor = function (location) {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * A cursor in the editor
+ *
+ * @constructor
+ * @param {EditorStore} store   The store to which this cursor belongs
+ * @param {number}      id      The unique ID of this cursor
+ * @param {boolean}     primary Whether this is the primary cursor
+ */
 var EditorCursor = function (store, id, primary) {
+  /**
+   * The ID of this cursor (or `null`)
+   * @type {number}
+   */
   this.id        = id || null;
+
+  /**
+   * Whether this is the primary cursor or not
+   * @type {boolean}
+   */
   this.primary   = primary || false;
+
+  /**
+   * The {@link EditorStore} to which this cursor belongs
+   * @type {EditorStore}
+   */
   this.store     = store;
+
+  /**
+   * The position of this cursor
+   * @type {EditorPosition}
+   */
   this.position  = new EditorPosition (0, 0);
+
+  /**
+   * The active selection for this cursor (or `null`)
+   * @type {EditorSelection}
+   */
   this.selection = null;
 
+  /**
+   * The line position of this cursor has changed
+   * @event EditorCursor#LineChanged
+   * @type {EditorEvent}
+   * @param {number} prev_line Previous line
+   * @param {number} new_line  New line
+   */
   this.LineChanged      = new EditorEvent ("EditorCursor.LineChanged");
+
+  /**
+   * The column position of this cursor has changed
+   * @event EditorCursor#ColumnChanged
+   * @type {EditorEvent}
+   * @param {number} prev_column Previous column
+   * @param {number} new_column  New column
+   */
   this.ColumnChanged    = new EditorEvent ("EditorCursor.ColumnChanged");
+
+  /**
+   * The cursor has changed
+   * @event EditorCursor#Changed
+   * @type {EditorEvent}
+   */
   this.Changed          = new EditorEvent ("EditorCursor.Changed");
+
+  /**
+   * The cursor's selection has changed
+   * @event EditorCursor#SelectionChanged
+   * @type {EditorEvent}
+   */
   this.SelectionChanged = new EditorEvent ("EditorCursor.SelectionChanged");
 };
 
+/**
+ * Create a new cursor at the same location as this one.
+ *
+ * This will create a new `EditorCursor` with the same {@link EditorStore}
+ * and the same `position` property (via {@link EditorPosition#clone}).
+ *
+ * The new cursor will automatically be added to the {@link EditorCursorCollection}
+ * in the parent {@link EditorStore} (see {@link EditorStore#cursors}).
+ *
+ * @returns {EditorCursor} A new cursor at the same location
+ */
 EditorCursor.prototype.clone = function () {
   var clone = new EditorCursor (this.store);
   clone.position = this.position.clone ();
@@ -650,10 +1264,33 @@ EditorCursor.prototype.clone = function () {
   return clone;
 };
 
+/**
+ * Returns the {@link EditorLine} on which this cursor is located (or `null`).
+ * @returns {EditorLine} The line on which this cursor resides
+ */
 EditorCursor.prototype.getLine = function () {
-  return this.store.lines[this.position.line];
+  return this.store.lines[this.position.line] || null;
 };
 
+/**
+ * Set the line for this cursor.
+ *
+ * The line the cursor is moved to is clamped within the number of lines
+ * which are in the parent {@link EditorStore} to make sure that cursors
+ * are not moved outside of the valid range.
+ *
+ * If the cursor line is changed, then the {@link EditorCursor#event:LineChanged}
+ * is fired (via {@link EditorCursor#onLineChanged}) after which the
+ * {@link EditorCursor#event:Changed} is fired (via {@link EditorCursor#onChanged}).
+ *
+ * This is somewhat more efficient than the {@link EditorCursor#setLocation} when
+ * moving the cursor line in that it is only concerned with which line the cursor
+ * is on.
+ *
+ * @param {number} line The new line for the cursor
+ * @fires EditorCursor#LineChanged
+ * @fires EditorCursor#Changed
+ */
 EditorCursor.prototype.setLine = function (line) {
   line = Math.min (this.store.getMaxLineNumber () - 1, Math.max (0, line));
 
@@ -665,6 +1302,24 @@ EditorCursor.prototype.setLine = function (line) {
   }
 };
 
+/**
+ * Set the column for this cursor.
+ *
+ * The column of the cursor is clamped within the current line to ensure
+ * that the cursor does not move outside a valid range.
+ *
+ * If the cursor column is changed, then the {@link EditorCursor#event:ColumnChanged}
+ * is fired (via {@link EditorCursor#onColumnChanged}) after which the
+ * {@link EditorCursor#event:Changed} event is fired (via {@link EditorCursor#onChanged}).
+ *
+ * This is somewhat more efficient than the {@link EditorCursor#setLocation} when
+ * moving the cursor column in that it is only concerned with which column the cursor
+ * is on.
+ *
+ * @param {number} column The new column for the cursor
+ * @fires EditorCursor#LineChanged
+ * @fires EditorCursor#Changed
+ */
 EditorCursor.prototype.setColumn = function (column) {
   var line     = this.store.lines[this.position.line];
 
@@ -677,10 +1332,44 @@ EditorCursor.prototype.setColumn = function (column) {
   }
 };
 
+/**
+ * Returns the location of the cursor.
+ *
+ * Note that this method returns a clone of the {@link EditorPosition}
+ * via {@link EditorPosition#clone}. This ensure that modifications to
+ * the returned positon object does not inadvertently move the cursor
+ * without firing the required events to update the view.
+ *
+ * @returns {EditorPosition} The location of the cursor
+ */
 EditorCursor.prototype.getLocation = function () {
   return this.position.clone ();
 };
 
+/**
+ * Set the location (both line and column) of the cursor.
+ *
+ * This will set the line and column of the cursor to the line and column
+ * given in the {@link EditorPosition} argument. The line and column given
+ * is clamped to the current set of lines in the parent {@link EditorStore}
+ * and the columns within the target line to make sure that the cursor is
+ * not moved to an invalid location.
+ *
+ * If the cursor line is changed then the {@link EditorCursor#event:LineChanged}
+ * event is fired with the previous and new line indicies (see {@link EditorCursor#onLineChanged}).
+ *
+ * If the cursor column is changed then the {@link EditorCursor#event:ColumnChanged}
+ * event is fired with the previous and new column indices (see {@link EditorCursor#onColumnChanged}).
+ *
+ * If either the cursor line or column are changed then the {@link EditorCursor#event:Changed}
+ * event is fired (see {@link EditorCursor#onChanged}).
+ *
+ * An option is given to extend the selection to include the new location
+ * (see {@link EditorCursor#extendSelection}).
+ *
+ * @param {EditorPosition} location          The new location of the cursor
+ * @param {boolean}        extend_selection  Whether to extend the selection
+ */
 EditorCursor.prototype.setLocation = function (location, extend_selection) {
   var prev_loc     = this.getLocation ();
   var line_index   = Math.min (this.store.getMaxLineNumber () - 1, Math.max (0, location.line));
@@ -714,6 +1403,17 @@ EditorCursor.prototype.setLocation = function (location, extend_selection) {
   } else this.removeSelection ();
 };
 
+/**
+ * Move the cursor up a number of lines (if it can), see {@link EditorCursor#setLine}.
+ * If the new line invalidates the postion of the cursor it's column will be changed
+ * (see {@link EditorCursor#setColumn}).
+ *
+ * An option is given to extend the selection to include the new location
+ * (see {@link EditorCursor#extendSelection}).
+ *
+ * @param {number}  lines            The number of lines to move
+ * @param {boolean} extend_selection Whether to extend the selection to the new location
+ */
 EditorCursor.prototype.moveUp = function (lines, extend_selection) {
   var prev_loc = this.getLocation ();
 
@@ -729,6 +1429,17 @@ EditorCursor.prototype.moveUp = function (lines, extend_selection) {
   } else this.removeSelection ();
 };
 
+/**
+ * Move the cursor down a number of lines (if it can), see {@link EditorCursor#setColumn}.
+ * If the new line invalidates the position of the cursor, it's column will be changed
+ * (see {@link EditorCursor#setColumn}).
+ *
+ * An option is given to extend the selection include the new location
+ * (see {@link EditorCursor#extendSelection}).
+ *
+ * @param {number}  lines            The number of lines to move
+ * @param {boolean} extend_selection Whether to extend the selection to the new location
+ */
 EditorCursor.prototype.moveDown = function (lines, extend_selection) {
   var prev_loc = this.getLocation ();
 
@@ -744,6 +1455,13 @@ EditorCursor.prototype.moveDown = function (lines, extend_selection) {
   } else this.removeSelection ();
 };
 
+
+/**
+ * Move the cursor to the left a number of columns (if it can), see {@link EditorCursor#setColumn}.
+ *
+ * @param {number}  columns          Number of columns to move
+ * @param {boolean} extend_selection Whether to extend the selection
+ */
 EditorCursor.prototype.moveLeft = function (columns, extend_selection) {
   if (!extend_selection && this.selection) {
     this.setLocation (this.selection.region.getStartLocation ());
@@ -765,6 +1483,12 @@ EditorCursor.prototype.moveLeft = function (columns, extend_selection) {
   } else this.removeSelection ();
 };
 
+/**
+ * Move the cursor to the right a number of columns (if it can), see {@link EditorCursor#setColumn}.
+ *
+ * @param {number}  columns          Number of columns to move
+ * @param {boolean} extend_selection Whether to extend the selection
+ */
 EditorCursor.prototype.moveRight = function (columns, extend_selection) {
   if (!extend_selection && this.selection) {
     this.setLocation (this.selection.region.getEndLocation ());
@@ -785,6 +1509,11 @@ EditorCursor.prototype.moveRight = function (columns, extend_selection) {
   } else this.removeSelection ();
 };
 
+/**
+ * Move to the start of the line.
+ *
+ * @param {boolean} extend_selection Whether to extend the selection
+ */
 EditorCursor.prototype.moveStart = function (extend_selection) {
   var prev_loc = this.getLocation ();
   this.setColumn (0);
@@ -793,6 +1522,11 @@ EditorCursor.prototype.moveStart = function (extend_selection) {
   } else this.removeSelection ();
 };
 
+/**
+ * Move to the end of the line.
+ *
+ * @param {boolean} extend_selection Whether to extend the selection
+ */
 EditorCursor.prototype.moveEnd = function (extend_selection) {
   var prev_loc = this.getLocation ();
   this.setColumn (this.getLine ().getLength ());
@@ -801,6 +1535,11 @@ EditorCursor.prototype.moveEnd = function (extend_selection) {
   } else this.removeSelection ();
 };
 
+/**
+ * Insert text at the current cursor location.
+ *
+ * @param {string} text Text to insert
+ */
 EditorCursor.prototype.insertText = function (text) {
   if (this.selection) {
     /* replace selection */
@@ -810,6 +1549,9 @@ EditorCursor.prototype.insertText = function (text) {
   }
 };
 
+/**
+ * Insert a tab character at the cursor location.
+ */
 EditorCursor.prototype.insertTab = function () {
   var line   = this.getLine ();
   var prev   = line.getPrevious ();
@@ -823,6 +1565,9 @@ EditorCursor.prototype.insertTab = function () {
   }
 };
 
+/**
+ * Insert a new line at the cursor location.
+ */
 EditorCursor.prototype.insertLine = function () {
   if (this.selection) {
     /* replace selection */
@@ -859,6 +1604,9 @@ EditorCursor.prototype.insertLine = function () {
   }
 };
 
+/**
+ * Delete a number of characters backwards from the cursor location.
+ */
 EditorCursor.prototype.deleteBackwards = function (count) {
   if (this.selection) {
     this.deleteSelected ();
@@ -882,6 +1630,9 @@ EditorCursor.prototype.deleteBackwards = function (count) {
   }
 };
 
+/**
+ * Delete a number of characters forwards of the cursor location.
+ */
 EditorCursor.prototype.deleteForwards = function (count) {
   if (this.selection) {
     this.deleteSelected ();
@@ -901,6 +1652,10 @@ EditorCursor.prototype.deleteForwards = function (count) {
   }
 };
 
+/**
+ * Extend the current selection to include the current location of the
+ * cursor.
+ */
 EditorCursor.prototype.extendSelection = function (prev_loc) {
   if (!this.selection) {
     this.selection = new EditorSelection (prev_loc);
@@ -910,6 +1665,9 @@ EditorCursor.prototype.extendSelection = function (prev_loc) {
   this.onSelectionChanged ();
 };
 
+/**
+ * Remove the selection
+ */
 EditorCursor.prototype.removeSelection = function () {
   if (this.selection) {
     this.selection = null;
@@ -917,10 +1675,16 @@ EditorCursor.prototype.removeSelection = function () {
   }
 };
 
+/**
+ * Test if the cursor is next to an encapsulator
+ */
 EditorCursor.prototype.isNextToEncapsulator = function () {
   return this.getLine ().isEncapsulatorAt (this.position.column) || this.getLine ().isEncapsulatorAt (this.position.column - 1);
 };
 
+/**
+ * Get the offset of cursor at the encapsualtor next to the cursor (or `null`)
+ */
 EditorCursor.prototype.getEncapsulatorOffset = function () {
   var line = this.getLine ();
 
@@ -933,6 +1697,9 @@ EditorCursor.prototype.getEncapsulatorOffset = function () {
   }
 };
 
+/**
+ * Find the matching encapsulator position
+ */
 EditorCursor.prototype.getMatchingEncapsulator = function () {
   var line = this.getLine ();
 
@@ -956,30 +1723,54 @@ EditorCursor.prototype.getMatchingEncapsulator = function () {
   }
 };
 
-/* Fire the 'LineChanged' with the two arguments (last line and new line) */
+/**
+ * Fire the {@link EditorCursor#event:LineChanged} event and call {@link EditorStore#onCursorChanged}
+ * with this cursor as an argument.
+ *
+ * @param {number} last_line The previous line index
+ * @param {number} line      The new line index
+ */
 EditorCursor.prototype.onLineChanged = function (last_line, line) {
   this.LineChanged.fire (last_line, line);
   this.store.onCursorChanged (this);
 };
 
-/* Fire the 'ColumnChanged' with the two arguments (last column and new column) */
+/**
+ * Fire the {@link EditorCursor#event:ColumnChanged} event and call {@link EditorStore#onCursorChanged}
+ * with this cursor as an argument.
+ *
+ * @param {number} last_column The previous column index
+ * @param {number} column      The new column index
+ */
 EditorCursor.prototype.onColumnChanged = function (last_column, column) {
   this.ColumnChanged.fire (last_column, column);
   this.store.onCursorChanged (this);
 };
 
-/* Fire the 'Changed' event (with no parameters) and then call 'onCursorChanged' in the EditorStore */
+/**
+ * Fire the {@link EditorCursor#event:Changed} event and call {@link EditorStore#onCursorChanged}
+ * with this cursor as an argument.
+ */
 EditorCursor.prototype.onChanged = function () {
   this.Changed.fire ();
   this.store.onCursorChanged (this);
 };
 
+/**
+ * Fire the {@link EditorCursor#event:SelectionChanged} event.
+ */
 EditorCursor.prototype.onSelectionChanged = function () {
   this.SelectionChanged.fire ();
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * Class that provides management of a collection of cursors.
+ *
+ * @constructor
+ * @param {EditorStore} store The store to which this collection belongs
+ */
 var EditorCursorCollection = function (store) {
   this.store     = store;
   this.nextId    = new EditorIdGenerator ();
@@ -995,12 +1786,18 @@ var EditorCursorCollection = function (store) {
   this.CursorRemoved = new EditorEvent ("EditorCursorCollection.CursorRemoved");
 };
 
+/**
+ * Sort the secondary cursors into ascending ow-order.
+ */
 EditorCursorCollection.prototype.sortSecondary = function () {
   this.secondary.sort (function (a, b) {
     return a.position.line - b.position.line;
   });
 };
 
+/**
+ * Add a new secondary cursor
+ */
 EditorCursorCollection.prototype.addCursor = function (cursor) {
   cursor.id = this.nextId ();
   this.secondary.push (cursor);
@@ -1009,11 +1806,21 @@ EditorCursorCollection.prototype.addCursor = function (cursor) {
   this.onCursorAdded (cursor);
 };
 
+/**
+ * Remove a secondary cursor.
+ *
+ * @param {EditorCursor} cursor Cursor to remove
+ */
 EditorCursorCollection.prototype.removeCursor = function (cursor) {
   cursor.id = null;
   this.removeCursorAt (this.secondary.indexOf (cursor));
 };
 
+/**
+ * Remove a secondary cursor at the given index.
+ *
+ * @param {number} index The index to the cursor at
+ */
 EditorCursorCollection.prototype.removeCursorAt = function (index) {
   var cursor = this.secondary[index];
   if (this.lastAdded >= index + 1) {
@@ -1024,6 +1831,9 @@ EditorCursorCollection.prototype.removeCursorAt = function (index) {
   this.onCursorRemoved (cursor);
 };
 
+/**
+ * Remove all secondary cursors.
+ */
 EditorCursorCollection.prototype.removeSecondary = function () {
   var old_secondary = this.secondary;
   this.secondary = [];
@@ -1033,12 +1843,18 @@ EditorCursorCollection.prototype.removeSecondary = function () {
   }
 };
 
+/**
+ * Get the index of the last added cursor.
+ */
 EditorCursorCollection.prototype.getLastAddedIndex = function () {
   if (this.secondary.length === 0 || this.lastAdded === 0) {
     return 0;
   } else return this.lastAdded;
 };
 
+/**
+ * Get an array of all cursors including the primary cursor.
+ */
 EditorCursorCollection.prototype.getAll = function () {
   var result = [];
 
@@ -1050,6 +1866,9 @@ EditorCursorCollection.prototype.getAll = function () {
   return result;
 };
 
+/**
+ * Get the cursor with the lowest row index.
+ */
 EditorCursorCollection.prototype.getCursorOnLowestLine = function () {
   if (this.secondary.length === 0) {
     return this.primary;
@@ -1061,6 +1880,9 @@ EditorCursorCollection.prototype.getCursorOnLowestLine = function () {
   }
 };
 
+/**
+ * Get the cursor with the highest row index.
+ */
 EditorCursorCollection.prototype.getCursorOnHighestLine = function () {
   if (this.secondary.length === 0) {
     return this.primary;
@@ -1072,14 +1894,25 @@ EditorCursorCollection.prototype.getCursorOnHighestLine = function () {
   }
 };
 
+/**
+ * Perform an operation over each cursor (primary and secondary).
+ */
 EditorCursorCollection.prototype.forEach = function (action) {
   this.getAll ().forEach (action);
 };
 
+/**
+ * Map a function over each cursor (primary and secondary) and return an
+ * array of results.
+ */
 EditorCursorCollection.prototype.map = function (action) {
   return this.getAll ().map (action);
 };
 
+/**
+ * Stop the blink timer (setting its index to the given value, falling
+ * back to `false` if not set).
+ */
 EditorCursorCollection.prototype.stopBlink = function (set_to) {
   window.clearInterval (this.blinker);
   this.blinker    = null;
@@ -1087,6 +1920,10 @@ EditorCursorCollection.prototype.stopBlink = function (set_to) {
   this.onBlinker (this.blinkIndex);
 };
 
+/**
+ * Start the blink timer, setting the index to the given value, falling
+ * back to `false` if not set.
+ */
 EditorCursorCollection.prototype.startBlink = function (set_to) {
   if (this.blinker) {
     window.clearInterval (this.blinker);
@@ -1101,15 +1938,25 @@ EditorCursorCollection.prototype.startBlink = function (set_to) {
   }.bind (this), 500);
 };
 
+/**
+ *
+ */
 EditorCursorCollection.prototype.onBlinker = function () {
   this.Blink.fire (this.blinkIndex);
 };
 
+/**
+ * @param {EditorCursor} cursor The cursor that was added
+ */
 EditorCursorCollection.prototype.onCursorAdded = function (cursor) {
   this.startBlink (true);
   this.CursorAdded.fire (cursor);
 };
 
+/**
+ *
+ * @param {EditorCursor} cursor The cursor that was removed
+ */
 EditorCursorCollection.prototype.onCursorRemoved = function (cursor) {
   this.startBlink (true);
   this.CursorRemoved.fire (cursor);
@@ -1117,6 +1964,12 @@ EditorCursorCollection.prototype.onCursorRemoved = function (cursor) {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ *
+ * @constructor
+ * @param {EditorStore}            store  The store to which this keymap belongs
+ * @param {EditorKeymap.Mapping[]} keymap The initial keymap configuration (if any)
+ */
 var EditorKeymap = function (store, keymap) {
   this.store        = store;
   this.mappings     = [];
@@ -1125,6 +1978,17 @@ var EditorKeymap = function (store, keymap) {
   this.deserialize (keymap);
 };
 
+/**
+ *
+ * @constructor
+ * @param {string}                 mode
+ * @param {string|RegExp|function} key
+ * @param {boolean}                shift
+ * @param {boolean}                ctrl
+ * @param {boolean}                alt
+ * @param {boolean}                meta
+ * @param {function}               command
+ */
 EditorKeymap.Mapping = function (mode, key, shift, ctrl, alt, meta, command) {
   this.mode    = mode;
   this.key     = key;
@@ -1181,6 +2045,9 @@ EditorKeymap.Mapping = function (mode, key, shift, ctrl, alt, meta, command) {
   }
 };
 
+/**
+ *
+ */
 EditorKeymap.Mapping.prototype.matchesEvent = function (mode, event) {
   return (this.mode  === null || this.mode  === mode          ) &&
          (this.shift === null || this.shift === event.shiftKey) &&
@@ -1190,6 +2057,10 @@ EditorKeymap.Mapping.prototype.matchesEvent = function (mode, event) {
          this.keyMatcher (event);
 };
 
+/**
+ *
+ * @param {EditorKeymap.Mapping[]} map
+ */
 EditorKeymap.prototype.deserialize = function (map) {
   if (map instanceof Array) {
     map.forEach (function (mapping, index) {
@@ -1212,6 +2083,12 @@ EditorKeymap.prototype.deserialize = function (map) {
   }
 };
 
+
+/**
+ *
+ * @param {string} mode  The key event mode (`up`, `down` or `press`)
+ * @param {Event}  event The event object
+ */
 EditorKeymap.prototype.onKeyEvent = function (mode, event) {
   const store = this.store;
 
@@ -1237,18 +2114,31 @@ EditorKeymap.prototype.onKeyEvent = function (mode, event) {
   return false;
 };
 
+/**
+ *
+ * @param {Event} event The event object
+ */
 EditorKeymap.prototype.onKeyDown = function (event) {
   return this.onKeyEvent ("down", event);
 };
 
+/**
+ * @param {Event} event The event object
+ */
 EditorKeymap.prototype.onKeyUp = function (event) {
   return this.onKeyEvent ("up", event);
 };
 
+/**
+ * @param {Event} event The event object
+ */
 EditorKeymap.prototype.onKeyPress = function (event) {
   return this.onKeyEvent ("press", event);
 };
 
+/**
+ * The default keymap
+ */
 EditorKeymap.defaultKeymap = [
   /*
    * Standard Cursor Direction
@@ -1397,8 +2287,25 @@ EditorKeymap.defaultKeymap = [
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * Provides the syntax highlighting state machine.
+ *
+ * @constructor
+ * @param {object} config The syntax configuration to load into this engine instance.
+ */
 var EditorSyntaxEngine = function (config) {
+  /**
+   * The configuration for this syntax engine
+   * @type object
+   * @default {}
+   */
   this.config = config || {};
+
+  /**
+   * The state of the engine
+   * @type number
+   * @default 0
+   */
   this.state  = 0;
 
   Object.keys (this.config).forEach (function (state_name) {
@@ -1437,12 +2344,281 @@ var EditorSyntaxEngine = function (config) {
   }.bind (this));
 };
 
+/**
+ * Represents a parsed syntax region with a given style and content.
+ *
+ * @constructor
+ * @param {number} start Start of the new syntax region (column index)
+ */
+EditorSyntaxEngine.SyntaxRegion = function (start) {
+  /**
+   * The name of the style applied to this syntax region
+   * @type string
+   * @default null
+   */
+  this.style   = null;
+
+  /**
+   * The start column of this syntax region
+   * @type string
+   * @default 0 or the start parameter
+   */
+  this.start   = start || 0;
+
+  /**
+   * The end column of this syntax region
+   * @type number
+   * @default 0 or the start parameter
+   */
+  this.end     = this.start;
+
+  /**
+   * The length of this syntax region (in original characters)
+   * @type number
+   * @default 0
+   */
+  this.length  = 0;
+
+  /**
+   * The text that is contained in this syntax region.
+   * @type string
+   * @default ""
+   */
+  this.text    = "";
+
+  /**
+   * The HTML escaped version of the text contained in this syntax region.
+   * @type string
+   * @default ""
+   */
+  this.escaped = "";
+};
+
+/**
+ * Escape a code point to HTML.
+ *
+ * @returns {string}    The HTML entity
+ * @param {number} code The code point to escape
+ */
+EditorSyntaxEngine.SyntaxRegion.escapeCodePoint = function (code) {
+  switch (code) {
+    case 0x20: return "&nbsp;";
+    case 0x26: return "&amp;";
+    case 0x3c: return "&lt;";
+    case 0x3e: return "&gt;";
+    default:
+      return String.fromCodePoint (code);
+  }
+};
+
+/**
+ * Escape a string to HTML.
+ *
+ * @returns {string}    The HTML escaped string
+ * @param {string} str  The string to escape
+ */
+EditorSyntaxEngine.SyntaxRegion.escapeString = function (str) {
+  const ESCAPED = { '&': "&amp;", '<': "&lt;", '>': "&gt;" };
+  return str.replace (/[&<>]/g, function (c) {
+    return ESCAPED[c];
+  });
+};
+
+/**
+ * Append a code point to this syntax region.
+ *
+ * This will append the given code point to this syntax region, using {@link EditorSyntaxEngine.SyntaxRegion.escapeCodePoint}.
+ *
+ * This method will append the original code point as a character string to the
+ * `text` property, the escaped code point to the `escaped` property, and increment
+ * the `length` and `end` properties.
+ *
+ * @param {number} code   The code point to append to this syntax region
+ */
+EditorSyntaxEngine.SyntaxRegion.prototype.appendCodePoint = function (code) {
+  this.escaped += EditorSyntaxEngine.SyntaxRegion.escapeCodePoint (code);
+  this.text    += String.fromCodePoint (code);
+  this.length++;
+  this.end++;
+};
+
+/**
+ * Append a string to this syntax region.
+ *
+ * This will append the given string to this syntax region using {@link EditorSyntaxEngine.SyntaxRegion.escapeString}.
+ *
+ * This method will append the original string to the `text` property, the escaped
+ * string to the `escaped` property, and increment the `length` and `end` properties
+ * by the length of the string.
+ *
+ * @param {string} str    The string to append to this syntax region
+ */
+EditorSyntaxEngine.SyntaxRegion.prototype.appendString = function (str) {
+  this.escaped += EditorSyntaxEngine.SyntaxRegion.escapeString (str);
+  this.text    += str;
+  this.length  += str.length;
+  this.end     += str.length;
+};
+
+/**
+ * Represents a collection of {@link EditorSyntaxEngine.SyntaxRegion}.
+ *
+ * Whilst this is mostly a wrapper around an array, a few functions are provided to append characters and
+ * strings with a given style to the current `SyntaxRegion`, and automatically create a new `SyntaxRegion`
+ * when the style changes.
+ *
+ * @example
+ * var regions = new EditorSyntaxEngine.SyntaxRegionCollection ();
+ * regions.appendString ("reserved_word", "return");
+ * regions.appendString ("whitespace", " ");
+ * regions.appendString ("number", "0x");
+ * regions.appendString ("number", "123abc");
+ * regions.finish ();
+ *
+ * // At this point the 'regions' property will contain the following regions:
+ * //   { start: 0, end: 6, length: 6, style: "reserved_word", text: "return", escaped: "return" }
+ * //   { start: 6, end: 7, length: 1, style: "whitespace", text: " ", escaped: "&nbsp;" }
+ * //   { start: 7, end: 15, length: 8, style; "number", text: "0x123abc", escaped: "0x123abc" }
+ *
+ * @constructor
+ */
+EditorSyntaxEngine.SyntaxRegionCollection = function () {
+  /**
+   * The regions that have been collected up in this collection.
+   * @type EditorSyntaxEngine.SyntaxRegion[]
+   * @default []
+   */
+  this.regions = [];
+
+  /**
+   * The current region that this collection is populating.
+   * @type EditorSyntaxEngine.SyntaxRegion
+   */
+  this.current = new EditorSyntaxEngine.SyntaxRegion ();
+
+  /**
+   * The total length of the regions within this syntax region collection.
+   * @type number
+   * @default 0
+   */
+  this.length  = 0;
+};
+
+/**
+ * Save the current `SyntaxRegion` in the `current` property and create a new one.
+ *
+ * This method will push the current `SyntaxRegion` into the `regions` property and
+ * increment the `length` property by the `length` of the current `SyntaxRegion`.
+ *
+ * Then it will create a new `SyntaxRegion` and assign it to the `current` property.
+ * This new `SyntaxRegion` will have a start offset being the current `length` of
+ * this `SyntaxRegionCollection`.
+ */
+EditorSyntaxEngine.SyntaxRegionCollection.prototype.saveCurrent = function () {
+  this.regions.push (this.current);
+  this.length += this.current.length;
+  this.current = new EditorSyntaxEngine.SyntaxRegion (this.length);
+};
+
+/**
+ * Finish off this syntax region collection by pusing the current `SyntaxRegion` if
+ * it is not empty.
+ */
+EditorSyntaxEngine.SyntaxRegionCollection.prototype.finish = function () {
+  if (this.current.length > 0) {
+    this.saveCurrent ();
+  }
+};
+
+/**
+ * Given a style, either set the `style` property of the current `SyntaxRegion`
+ * or save the current region (via {@link EditorSyntaxEngine.SyntaxRegionCollection#saveCurrent})
+ * and set the `style` of the new `SyntaxRegion`.
+ *
+ * Essentially this method ensures that the given style matches the current `SyntaxRegion`
+ * or it will start a new region. If the current region has not yet had a style assigned
+ * to it (the `style` property is `null`) then the style is assigned to it.
+ *
+ * @param {string} style    The style to apply to the current (or new) syntax region
+ */
+EditorSyntaxEngine.SyntaxRegionCollection.prototype.saveOrSetStyle = function (style) {
+  if (this.current.style === null) {
+    this.current.style = style;
+  } else if (this.current.style !== style) {
+    this.saveCurrent ();
+    this.current.style = style;
+  }
+};
+
+/**
+ * Append a code point to the current `SyntaxRegion` with the given style.
+ *
+ * @param {string} style    The style of the code point
+ * @param {number} code     The code point
+ * @see {@link EditorSyntaxEngine.SyntaxRegion#appendCodePoint}
+ * @see {@link EditorSyntaxEngine.SyntaxRegionCollection#saveOrSetStyle}
+ */
+EditorSyntaxEngine.SyntaxRegionCollection.prototype.appendCodePoint = function (style, code) {
+  this.saveOrSetStyle (style);
+  this.current.appendCodePoint (code);
+};
+
+/**
+ * Append a string to the current `SyntaxRegion` with the given style.
+ *
+ * @param {string} style    The style of the string
+ * @param {string} str      The string to append
+ * @see {@link EditorSyntaxEngine.SyntaxRegion#appendString}
+ * @see {@link EditorSyntaxEngine.SyntaxRegionCollection#saveOrSetStyle}
+ */
+EditorSyntaxEngine.SyntaxRegionCollection.prototype.appendString = function (style, str) {
+  this.saveOrSetStyle (style);
+  this.current.appendString (str);
+};
+
+/**
+ * Return the style name for the current state of the syntax engine.
+ *
+ * The various states in a syntax highlighting state machine can have an associated style. This
+ * associated style is essentially the default style used when rendering elements that pass through
+ * the syntax highlighter whilst it is in that state.
+ *
+ * @returns {string} The style for the current state of the engine (or null)
+ */
 EditorSyntaxEngine.prototype.getStateStyle = function () {
   return this.config[this.state].style;
 };
 
-EditorSyntaxEngine.prototype.match = function (content, index) {
-  var str   = index ? content.substring (index) : content;
+/**
+ * This function will try and match the given string to the current ruleset.
+ *
+ * Essentially this means taking the rules from the current state of the syntax engine and testing
+ * them one-by-one until either one of them matches the given string or we reach the end of the ruleset.
+ *
+ * If there is a match then this method will return an object describing the match. If no rule could
+ * be matched against the given string then the function will return `null`.
+ *
+ * When a rule is successfully matched which has a `goto` property, the state of the engine is changed
+ * to that target state.
+ *
+ * On successful match of a rule the returned object from this method will have the following properties:
+ *
+ * + A `rule` property which references the rule that was successfully matched,
+ * + A `length` property giving the number of characters that were matched,
+ * + A `style` property that gives the style of the matched characters.
+ *
+ * The `style` property contains either:
+ *
+ * 1. The `style` property of the successfully matched rule,
+ * 2. The `style` property of the current state (after possible state change), or
+ * 3. The `style` property of the previous state.
+ *
+ * @param {string} content The text to test against the current ruleset
+ * @param {number} [start] The start index into `content`
+ * @returns {object}
+ */
+EditorSyntaxEngine.prototype.match = function (content, start) {
+  var str   = start ? content.substring (start) : content;
   var state = this.config[this.state];
 
   for (var i = 0; i < state.rules.length; i++) {
@@ -1463,6 +2639,13 @@ EditorSyntaxEngine.prototype.match = function (content, index) {
   return null;
 };
 
+/**
+ * Match the end of a line.
+ *
+ * Certain states match against the end of the line (those with a `$eol` property). This method
+ * will check whether there is a `$eol` property in the current state, and if so it will change
+ * to the target state.
+ */
 EditorSyntaxEngine.prototype.matchEOL = function () {
   var state = this.config[this.state];
   if (state.hasOwnProperty ("$eol")) {
@@ -1470,6 +2653,131 @@ EditorSyntaxEngine.prototype.matchEOL = function () {
   }
 };
 
+/**
+ * Perform syntax highlighting for a single line.
+ *
+ * @example
+ * var engine = new EditorSyntaxEngine (EditorSyntaxEngine.JavaScript);
+ * var result = engine.hightlightLine ("return true", 0);
+ *
+ * @param {string} line          The line that we are to syntax highlight
+ * @param {number} [start_state] The initial state for the line (default to current state)
+ * @param {number} [tab_size]    The size to which tabs should be expanded (default: 2)
+ * @returns {EditorSyntaxEngine.SyntaxRegionCollection}
+ */
+EditorSyntaxEngine.prototype.highlightLine = function (line, start_state, tab_size) {
+  /* Initialize at the start state (or original state) */
+  this.state = start_state || this.state;
+
+  /* Make sure that the tab size is sane; fall back to the default config */
+  tab_size = tab_size || EditorStore.defaultConfig.tabSize;
+
+  const length     = line.length;
+  var   regions    = new EditorSyntaxEngine.SyntaxRegionCollection ();
+  var   last_index = 0;
+
+  while (last_index < length) {
+    const char = line[last_index];
+    const code = char.codePointAt (0);
+
+    if (code === 0x09) { /* tab */
+      for (var t = 0; t < tab_size; t++) {
+        regions.appendCodePoint ("whitespace", 0x20);
+      }
+
+      last_index++;
+    } else if (/\s/.test (char)) {
+      regions.appendCodePoint ("whitespace", code);
+      last_index++;
+    } else {
+      var result = this.match (line, last_index);
+      if (result) {
+        regions.appendString (result.style, line.substring (last_index, last_index + result.length));
+        last_index += result.length;
+      } else {
+        regions.appendCodePoint (this.getStateStyle () || "plain", code);
+        last_index++;
+      }
+    }
+  }
+
+  regions.finish ();
+  this.matchEOL ();
+
+  return regions;
+};
+
+/**
+ * Perform syntax highlighting over the given set of lines.
+ *
+ * This method will run the syntax highlighting engine of the given set of lines and
+ * return an array of arrays of {@link EditorSyntaxEngine.SyntaxRegion}. Each element
+ * of the array corresponds to a line, and each sub-element describes a syntax region.
+ *
+ * @example
+ * var engine = new EditorSyntaxEngine (EditorSyntaxEngine.JavaScript);
+ * var lines  = [ "function foo () {", "  return true;", "}" ];
+ * var result = engine.highlightLines (lines, 0);
+ *
+ * @param {string[]} lines         Array of lines to syntax highlight
+ * @param {number}   [start_state] The start state for the engine (default: to current state)
+ * @param {number}   [tab_size]    The size to which tabs should be expanded (default: 2)
+ * @returns {EditorSyntaxEngine.SyntaxRegion[][]}
+ */
+EditorSyntaxEngine.prototype.highlightLines = function (lines, start_state, tab_size) {
+  /* Initialise at the start state (or original satte) */
+  this.state = start_state || this.state;
+
+  /* Make sure that the tab size is sane; fallback to the default config */
+  tab_size = tab_size || EditorStore.defaultConfig.tabSize;
+
+  var regions = [];
+  for (var i = 0; i < lines.length; i++) {
+    regions.push (this.highlightLine (lines[i], null, tab_size).regions);
+    // const line       = lines[i];
+    // const length     = line.length;
+    // var   region     = new EditorSyntaxEngine.SyntaxRegionCollection ();
+    // var   last_index = 0;
+
+    // while (last_index < length) {
+    //   const char = line[last_index];
+    //   const code = char.codePointAt (0);
+
+    //   if (code === 0x09) { /* tab */
+    //     for (var t = 0; t < tab_size; t++) {
+    //       region.appendCodePoint ("whitespace", 0x20);
+    //     }
+
+    //     last_index++;
+    //   } else if (/\s/.test (char)) {
+    //     region.appendCodePoint ("whitespace", code);
+    //     last_index++;
+    //   } else {
+    //     var result = this.match (line, last_index);
+    //     if (result) {
+    //       region.appendString (result.style, line.substring (last_index, last_index + result.length));
+    //       last_index += result.length;
+    //     } else {
+    //       region.appendCodePoint (this.getStateStyle () || "plain", code);
+    //       last_index++;
+    //     }
+    //   }
+    // }
+
+    // region.finish ();
+    // regions.push (region.regions);
+    // this.matchEOL ();
+  }
+
+  return regions;
+};
+
+/**
+ * A syntax defintion for the JavaScript language.
+ *
+ * @example
+ * var engine = new EditorSyntaxEngine (EditorSyntaxEngine.JavaScript);
+ */
 EditorSyntaxEngine.JavaScript = {
   /* no state */
   0: {
@@ -1501,7 +2809,7 @@ EditorSyntaxEngine.JavaScript = {
 
       {
         name:  "reserved_word",
-        expr:  /^(var|function|new|this|typeof|true|false|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|while|do|instanceof|const)\b/,
+        expr:  /^(var|function|new|this|typeof|true|false|null|prototype|return|try|catch|if|else|for(all)?|continue|break|throw|switch|case|while|do|instanceof|const)\b/,
         style: "reserved_word"
       },
 
@@ -1593,6 +2901,10 @@ EditorSyntaxEngine.JavaScript = {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * @constructor
+ * @param {EditorStore} store The store to which this indent ranges collection belongs
+ */
 var EditorIndentRanges = function (store) {
   this.store  = store;
   this.ranges = [];
@@ -1601,6 +2913,9 @@ var EditorIndentRanges = function (store) {
   this.update ();
 };
 
+/**
+ *
+ */
 EditorIndentRanges.prototype.update = function () {
   var store  = this.store;
   var ranges = [];
@@ -1639,21 +2954,73 @@ EditorIndentRanges.prototype.update = function () {
   this.ranges = ranges;
 };
 
+/**
+ *
+ */
 EditorIndentRanges.prototype.onChanged = function () {
   this.Changed.fire ();
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * @constructor
+ * @param {object} [config]  The configuration for this editor store
+ * @param {string} [initial] The initial content of the editor
+ */
 var EditorStore = function (config, initial) {
+  /**
+   * The scroll position has changed
+   * @event EditorStore#Scroll
+   * @type {EditorEvent}
+   * @param {number} scroll_top The new top scroll value
+   */
   this.Scroll             = new EditorEvent ("EditorStore.Scroll");
+
+  /**
+   * A cursor has changed
+   * @event EditorStore#CursorChanged
+   * @type {EditorEvent}
+   * @param {EditorCursor} cursor The cursor that has changed
+   */
   this.CursorChanged      = new EditorEvent ("EditorStore.CursorChanged");
-  this.CursorAdded        = new EditorEvent ("EditorStore.CursorAdded");
-  this.CursorRemoved      = new EditorEvent ("EditorStore.CursorRemoved");
+
+  /**
+   * The lines in the store have changed
+   * @event EditorStore#LinesChanged
+   * @type {EditorEvent}
+   */
   this.LinesChanged       = new EditorEvent ("EditorStore.LinesChanged");
+
+  /**
+   * The height of a line (held in the `lineHeight` property) has changed
+   * @event EditorStore#LineHeightChanged
+   * @type {EditorEvent}
+   */
   this.LineHeightChanged  = new EditorEvent ("EditorStore.LineHeightChanged");
+
+  /**
+   * The width of a character (held in the `charWidth` property) has changed
+   * @event EditorStore#CharWidthChanged
+   * @type {EditorEvent}
+   */
   this.CharWidthChanged   = new EditorEvent ("EditorStore.CharWidthChanged");
+
+  /**
+   * The content of a line has changed
+   * @event EditorStore#LineContentChanged
+   * @type {EditorEvent}
+   * @param {EditorLine} line The line that has changed it's content
+   */
   this.LineContentChanged = new EditorEvent ("EditorStore.LineContentChanged");
+
+  /**
+   * The active line has changed (held in the `activeLine` property)
+   * @event EditorStore#ActiveLineChanged
+   * @type {EditorEvent}
+   * @param {number} prev The previous active line
+   * @param {number} next The new active line
+   */
   this.ActiveLineChanged  = new EditorEvent ("EditorStore.ActiveLineChanged");
 
   this.config       = Object.assign ({}, EditorStore.defaultConfig, config);
@@ -1667,11 +3034,16 @@ var EditorStore = function (config, initial) {
   this.viewHeight   = 0;
   this.nextLineId   = new EditorIdGenerator ();
   this.indentRanges = new EditorIndentRanges (this);
+  this.syntaxEngine = this.config.syntax ? new EditorSyntaxEngine (this.config.syntax) : null;
   this.editorTheme  = new EditorThemeColors ();
+  this.loading      = false;
 
   this.deserialize (initial);
 };
 
+/**
+ * Default configuration
+ */
 EditorStore.defaultConfig = {
   lineNumbers:        true,
   minLineNumberChars: 2,
@@ -1684,31 +3056,55 @@ EditorStore.defaultConfig = {
   syntax:             EditorSyntaxEngine.JavaScript
 };
 
+/**
+ * Get the next line ID
+ */
 EditorStore.prototype.getNextLineId = function () {
   return this.nextLineId++;
 };
 
+/**
+ * Deserialize the argument string into the editor
+ */
 EditorStore.prototype.deserialize = function (obj) {
+  this.loading = true;
+
   if (typeof obj === "string") {
     this.lines = obj.split (/[\r\n]/).map (function (line, index) {
-      return new EditorLine (this, index, line);
+      return new EditorLine (this, index, line, true);
     }.bind (this));
   }
 
   /* Make sure we have at least one line */
   if (this.lines.length === 0) {
     this.lines.push (new EditorLine (this, 0, ""));
+  } else {
+    this.lines.forEach (function (line) {
+      if (line.elements.length === 0) {
+        line.updateIndent ();
+        line.computeRender ();
+      }
+    });
   }
 
+  this.loading = false;
   this.indentRanges.update ();
 };
 
+/**
+ * Get the contents of the editor as a string.
+ */
 EditorStore.prototype.getText = function () {
   return this.lines.map (function (line) {
     return line.content;
   }).join ('\n');
 };
 
+/**
+ * Set the content of the editor to a new string.
+ *
+ * @param {string} text The new content of the editor
+ */
 EditorStore.prototype.setText = function (text) {
   /* Remove the secondary cursors and cancel any remaining selection */
   this.cursors.removeSecondary ();
@@ -1719,57 +3115,91 @@ EditorStore.prototype.setText = function (text) {
 
   /* Create the new lines */
   this.lines = obj.split (/[\r\n]/).map (function (line, index) {
-    return new EditorLine (this, index, line);
+    return new EditorLine (this, index, line, false);
   }.bind (this));
 
   /* Make sure we have at least one line */
   if (this.lines.length === 0) {
     this.lines.push (new EditorLine (this, 0, ""));
+  } else {
+    this.lines.forEach (function (line) {
+      line.updateIndent ();
+      line.computeRender ();
+    });
   }
 
   /* Notify the UI that the lines have changed */
   this.onLinesChanged ();
 };
 
-/* Renumerate the lines so their indices are correct */
+/**
+ * Renumerate the lines so that their indices are correct.
+ */
 EditorStore.prototype.renumerateLines = function () {
   this.lines.forEach (function (line, index) {
     line.index = index;
   });
 };
 
+/**
+ * Insert a new line into the store at the given index.
+ *
+ * @param {number} index The index at which to insert the new line
+ * @param {EidtorLine} line The line to insert at the given index
+ */
 EditorStore.prototype.insertLine = function (index, line) {
   this.lines.splice (index, 0, line);
   this.renumerateLines ();
   this.onLinesChanged ();
 };
 
+/**
+ * Delete a line at the given index from the store.
+ *
+ * @param {number} index The index of the line to delete
+ */
 EditorStore.prototype.deleteLine = function (index) {
   this.lines.splice (index, 1);
   this.renumerateLines ();
   this.onLinesChanged ();
 };
 
-/* Test if the given line index is a valid index */
+/**
+ * Test if the given index is a valid line index.
+ *
+ * @param {number} index The index to test
+ */
 EditorStore.prototype.isValidLineIndex = function (index) {
   return index >= 0 && index < this.lines.length;
 };
 
-/* Get the maximum line number (i.e. total number of lines) */
+/**
+ * Get the maximum number of lines (i.e. maximum line number).
+ */
 EditorStore.prototype.getMaxLineNumber = function () {
   return this.lines.length;
 };
 
-/* Work out how many characters it would take to render the maximum line number, taking into account the minLineNumberChars
- * configuration. That is, given 1000 lines, we would return 4 (it'll take four characters maximum). Given 5 lines but a
- * minLineNumberChars configuration of two, we would return two (it'll only take one character, but the minimum is two).
+/**
+ * Work out how many characters it would take to render the maximum line number,
+ * taking into account the minimum line number characters in the options.
+ *
+ * That is, given 1000 lines, we would return 4 (it'll take four characters
+ * to render the maximum line number).
+ *
+ * Additionally, given five lines but a `minLineNumberChars` option set to
+ * two, we would return two (it'll only take one character to render the maximum
+ * line number but the configuration has set the minimum to two).
  */
 EditorStore.prototype.getLineNumberCharWidth = function () {
   return Math.max (this.config.minLineNumberChars, 1 + Math.floor (Math.log10 (this.getMaxLineNumber ())));
 };
 
-/* Work out the offset (in characters) from the left of the editor container to the actual editor content, taking into
- * account the line numbers and gutter. */
+/**
+ * Work out the offset (in characters) from the left of the editor container
+ * to the actual editor content, taking into account the line numbers and
+ * gutter.
+ */
 EditorStore.prototype.getLeftOffsetChars = function () {
   var with_gutter = this.config.gutter ? 1 : 0;
   if (this.config.lineNumbers) {
@@ -1777,6 +3207,11 @@ EditorStore.prototype.getLeftOffsetChars = function () {
   } return with_gutter;
 };
 
+/**
+ * Set the line height for the editor (usually inferred from analysis of the DOM).
+ *
+ * @param {number} height The new line height
+ */
 EditorStore.prototype.setLineHeight = function (height) {
   if (this.lineHeight !== height) {
     this.lineHeight = height;
@@ -1784,6 +3219,11 @@ EditorStore.prototype.setLineHeight = function (height) {
   }
 };
 
+/**
+ * Set the character width for the editor (usually inferred from analysis of the DOM).
+ *
+ * @param {number} width The new character width
+ */
 EditorStore.prototype.setCharWidth = function (width) {
   if (this.charWidth != width) {
     this.charWidth = width;
@@ -1791,17 +3231,34 @@ EditorStore.prototype.setCharWidth = function (width) {
   }
 };
 
+/**
+ * Set the height of the view.
+ *
+ * @param {number} height The new view height
+ */
 EditorStore.prototype.setViewHeight = function (height) {
   this.viewHeight = height;
 };
 
+/**
+ * Given a client offset in pixels relative to the top-left of the view, return the
+ * equivalent character position (as a {@link EditorPosition}).
+ *
+ * @param {number} left The left offset (in pixels)
+ * @param {number} top  The top offset (in pixels)
+ * @returns {EditorPosition} Closest character position
+ */
 EditorStore.prototype.clientToIndices = function (left, top) {
-  return {
-    line:   Math.floor (top / this.lineHeight),
-    column: Math.round (left / this.charWidth)
-  };
+  return new EditorPosition (Math.floor (top / this.lineHeight), Math.round (left / this.charWidth));
 };
 
+/**
+ * Given an {@link EditorPosition}, convert the character position into a client
+ * position (in pixels) relative to the top-left of the view.
+ *
+ * @param {EditorPosition} location The character location
+ * @return {object} The left and top client position (in pixels)
+ */
 EditorStore.prototype.indicesToClient = function (location) {
   var result = { left: 0, top: 0 };
 
@@ -1810,33 +3267,125 @@ EditorStore.prototype.indicesToClient = function (location) {
   return result;
 };
 
+/**
+ * Set the primary cursor location to the given {@link EditorPosition}.
+ *
+ * This will remove any secondary cursors (see {@link EditorCursorCollection#removeSecondary})
+ * and set the location of the primary cursor (see {@link EditorCursor#setLocation}).
+ *
+ * @param {EditorPosition} location The new primary cursor location
+ */
 EditorStore.prototype.setCursorLocation = function (location) {
   this.cursors.removeSecondary ();
   this.cursors.primary.setLocation (location);
 };
 
+/**
+ * Get the index of the top-most visible line for the current scroll position
+ * and height of a line.
+ *
+ * @returns {number} The index of the top-most visible line
+ */
 EditorStore.prototype.getScrollTopLine = function () {
   return Math.min (this.lines.length - 1, Math.max (0, Math.floor (this.scrollTop / this.lineHeight)));
 };
 
+/**
+ * Get the index of the bottom-most visible line for the current scroll position,
+ * line height and view height.
+ *
+ * @returns {number} The index of the bottom-most visible line
+ */
 EditorStore.prototype.getScrollBottomLine = function () {
-  return this.getScrollTopLine () + Math.floor (this.viewHeight / this.lineHeight);
+  return this.getScrollTopLine () + Math.ceil (this.viewHeight / this.lineHeight);
 };
 
+/**
+ * Scroll to the line with the given index (see {@link EditorStore#onScroll}).
+ *
+ * Optionally this will center the view on the line at the given index.
+ *
+ * @param {number}  line     The index of the target line
+ * @param {boolean} [center] Whether to center the view on the given line
+ */
 EditorStore.prototype.scrollToLine = function (line, center) {
   const offset = line * this.lineHeight;
   if (center) {
-    this.onScroll (offset - this.viewHeight / 2);
+    this.onScroll (offset - this.viewHeight / 2, true);
   } else {
-    this.onScroll (offset);
+    this.onScroll (offset, true);
   }
 };
 
-EditorStore.prototype.onScroll = function (scrollTop) {
+/**
+ * Search through all the lines in the store to find the first line that contains
+ * the given string or regular expression (see {@link EditorLine#contains}).
+ *
+ * @param {string|RegExp} what The value to search for
+ * @returns {number} The index of the first line that contains the given search (or `-1`).
+ */
+EditorStore.prototype.findLineContains = function (what) {
+  for (var i = 0; i < this.lines.length; i++) {
+    if (this.lines[i].contains (what)) {
+      return i;
+    }
+  }
+
+  return -1;
+};
+
+/**
+ * When scrolling takes place (or we need to scroll to a position) this method
+ * is called to update the `scrollTop` property of the store and fire the
+ * {@link EditorStore#event:Scroll} event.
+ *
+ * @param {number} scrollTop The new scroll position
+ * @param {boolean} clamp_to_line Whether to clamp the position to a line
+ * @fires EditorStore#Scroll
+ */
+EditorStore.prototype.onScroll = function (scrollTop, clamp_to_line) {
   this.scrollTop = Math.max (0, scrollTop);
+
+  if (clamp_to_line) {
+    this.scrollTop = Math.round (this.scrollTop / this.lineHeight) * this.lineHeight;
+  }
+
   this.Scroll.fire (this.scrollTop);
 };
 
+/**
+ * When a cursor has changed this method is called by the cursor (see the
+ * {@link EditorCursor#onChanged} method for the most common call site).
+ *
+ * This method will first touch the blink timer in the {@link EditorCursorCollection}
+ * to make sure that all the cursors are visible (via {@link EditorCursorCollection#startBlink}).
+ * After which it will fire the {@link EditorStore#event:CursorChanged} with
+ * the argument given to this method.
+ *
+ * If the cursor that has changed is the primary cursor, and it has changed
+ * it's position away from the `activeLine` property then the `activeLine`
+ * property is updated with the `line` property of the `position` property
+ * of the primary cursor (setting `activeLine` to the primary cursor). This
+ * will cause the {@link EditorStore#event:ActiveLineChanged} event to be
+ * fired with the previous value of the `activeLine` property and the new line.
+ *
+ * If the primary cursors was changed so that it's line position is before the
+ * top-most visible line (see {@link EditorStore#getScrollTopLine}) then the
+ * {@link EditorStore#onScroll} method is called to move the new line position
+ * of the primary cursor into view.
+ *
+ * If the primary cursor was changed so that it's line position is after the
+ * bottom-most visible line (see {@link EditorStore#getScrollBottomLine}) then
+ * the {@link EditorStore#onScroll} method is called to move the new line
+ * position of the primary cursor into view.
+ *
+ * @param {EditorCursor} cursor The cursor which underwent a change
+ *
+ * @fires EditorCursorCollection#Blink
+ * @fires EditorStore#CursorChanged
+ * @fires EditorStore#ActiveLineChanged
+ * @fires EditorStore#Scroll
+ */
 EditorStore.prototype.onCursorChanged = function (cursor) {
   this.cursors.startBlink (true);
   this.CursorChanged.fire (cursor);
@@ -1848,7 +3397,7 @@ EditorStore.prototype.onCursorChanged = function (cursor) {
       this.ActiveLineChanged.fire (prev, cursor.position.line);
     }
 
-    if (cursor.position.line < this.getScrollTopLine ()) {
+    if (cursor.position.line <= this.getScrollTopLine ()) {
       this.onScroll (cursor.position.line * this.lineHeight);
     } else if (cursor.position.line >= this.getScrollBottomLine ()) {
       this.onScroll ((cursor.position.line + 1) * this.lineHeight - this.viewHeight);
@@ -1856,22 +3405,49 @@ EditorStore.prototype.onCursorChanged = function (cursor) {
   }
 };
 
+/**
+ * Fire the {@link EditorStore#event:LinesChanged} event and call the
+ * {@link EditorIndentRanges#update} method on the `indentRanges` property
+ * to update the indentation range blocks.
+ *
+ * @fires EditorStore#LinesChanged
+ */
 EditorStore.prototype.onLinesChanged = function () {
   this.LinesChanged.fire ();
   this.indentRanges.update ();
 };
 
+/**
+ * Fire the {@link EditorStore#event:LineHeightChanged} event.
+ * @fires EditorStore#LineHeightChanged
+ */
 EditorStore.prototype.onLineHeightChanged = function () {
   this.LineHeightChanged.fire ();
 };
 
+/**
+ * Fires the {@link EditorStore#event:CharWidthChanged} event.
+ * @fires EditorStore#CharWidthChanged
+ */
 EditorStore.prototype.onCharWidthChanged = function () {
   this.CharWidthChanged.fire ();
 };
 
+/**
+ * Fires the {@link EditorStore#event:LineContentChanged} event and calls
+ * the {@link EditorIndentRanges#update} method on the `indentRanges` property
+ * to update the indentation range blocks.
+ *
+ * The {@link EditorStore#event:LineContentChanged} event is passed the
+ * {@link EditorLine} argument from this method.
+ *
+ * @param {EditorLine} line The line who's content was changed
+ */
 EditorStore.prototype.onLineContentChanged = function (line) {
   this.LineContentChanged.fire (line);
-  this.indentRanges.update ();
+  if (!this.loading) {
+    this.indentRanges.update ();
+  }
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
@@ -2029,6 +3605,7 @@ var EditorRenderCursor = React.createClass ({
 
     /* Make sure the initial visibility of a cursor corresponds to all others */
     client.visibility = cursor.store.cursors.blinkIndex ? "visible" : "hidden";
+    client.height     = cursor.store.lineHeight;
     return <div ref="cursor" className={EditorTools.joinClasses (classes)} style={client} />;
   }
 });
@@ -2052,9 +3629,10 @@ var EditorRenderCursorSelection = React.createClass ({
       const right = i === selection.end_line ? selection.end_column : line.getLength ();
 
       this.selection_blocks.push ({
-        top:   i * lineHeight,
-        left:  left * charWidth,
-        width: (right - left) * charWidth
+        top:    i * lineHeight,
+        left:   left * charWidth,
+        width:  (right - left) * charWidth,
+        height: lineHeight + 1
       });
     }
   },
@@ -2195,7 +3773,7 @@ var EditorRenderLine = React.createClass ({
     return (
       <div ref="line"
            className={EditorTools.joinClasses (className)}
-           style={{ top: line.index * lineHeight }}
+           style={{ top: line.index * lineHeight, height: lineHeight }}
            dangerouslySetInnerHTML={{ __html: line.render }} />
     );
   }
@@ -2314,11 +3892,18 @@ var EditorRenderLines = React.createClass ({
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * @constructor
+ * @param {EditorStore} store  The editor store this minimap is to render
+ * @param {Canvas}      canvas The canvas to which the minimap is to render
+ */
 var EditorMinimap = function (store, canvas) {
   this.store        = store;
   this.canvas       = canvas;
-  this.width        = canvas.clientWidth;
-  this.height       = canvas.clientHeight;
+
+  var crect = canvas.getBoundingClientRect ();
+  this.width        = crect.width;
+  this.height       = crect.height;
   this.context      = canvas.getContext ("2d");
   this.buffer       = null;
   this.lineStart    = 0;
@@ -2394,10 +3979,18 @@ EditorMinimap.BrighterCharacterData = EditorMinimap.CharacterData.map (function 
   return Math.min (255, Math.max (0, Math.round (code * 1.5)));
 });
 
+/**
+ * Returns the index into the character data for the given character code.
+ * @param {number} charCode The character to render
+ */
 EditorMinimap.getCharIndex = function (charCode) {
   return Math.max (0, Math.min (EditorMinimap.MAX_CHAR, charCode - EditorMinimap.MIN_CHAR));
 };
 
+/**
+ * Returns the buffer the minimap renders to
+ * @returns {ImageData} The rendering image buffer (or `null` if unable to create)
+ */
 EditorMinimap.prototype.getBuffer = function () {
   if (this.buffer === null) {
     if (this.width === 0 || this.height === 0) {
@@ -2406,12 +3999,17 @@ EditorMinimap.prototype.getBuffer = function () {
 
     this.canvas.width  = this.width;
     this.canvas.height = this.height;
-    this.buffer        = this.context.createImageData (this.width, this.height);
+    this.buffer        = this.context.createImageData (Math.ceil (this.width), Math.ceil (this.height));
   }
 
   return this.buffer;
 };
 
+/**
+ * Clear the render buffer to the background color.
+ *
+ * The background color is looked up in the {@link EditorThemeColors} of the {@link EditorStore}.
+ */
 EditorMinimap.prototype.clearBuffer = function () {
   var buffer = this.getBuffer ();
   var color  = this.store.editorTheme.background;
@@ -2430,6 +4028,9 @@ EditorMinimap.prototype.clearBuffer = function () {
   }
 };
 
+/**
+ * Update the layout information for the minimap elements.
+ */
 EditorMinimap.prototype.updateLayout = function () {
   const store       = this.store;
   const max_lines   = Math.floor (this.canvas.clientHeight / EditorMinimap.CHAR_HEIGHT);
@@ -2458,10 +4059,22 @@ EditorMinimap.prototype.updateLayout = function () {
   }
 };
 
+/**
+ * Renders a character into the minimap buffer.
+ *
+ * @param {number[]} charData The character data table
+ * @param {ImageData} buffer The buffer to render to
+ * @param {number} x The x-coordinate into the buffer
+ * @param {number} y The y-coordinate into the buffer
+ * @param {number} charCode The character code to render
+ * @param {EditorColor} background The background color
+ * @param {EditorColor} color The foreground color
+ */
 EditorMinimap.renderChar = function (charData, buffer, x, y, charCode, background, color) {
   const dest        = buffer.data;
   var   dest_offset = 4 * (y * buffer.width + x);
   const char_offset = EditorMinimap.getCharIndex (charCode) << 3;
+  const remaining   = buffer.width - x;
 
   var br, bg, bb, cr, cg, cb;
   br = background.r;
@@ -2471,62 +4084,99 @@ EditorMinimap.renderChar = function (charData, buffer, x, y, charCode, backgroun
   cg = color.g - bg;
   cb = color.b - bb;
 
-  var c = charData[char_offset + 0] / 255;
-  dest[dest_offset + 0] = br + c * cr;
-  dest[dest_offset + 1] = bg + c * cg;
-  dest[dest_offset + 2] = bb + c * cb;
-  dest[dest_offset + 3] = 0xff;
+  if (remaining === 0) {
+    return;
+  } else if (remaining === 1) {
+    var c = charData[char_offset + 0] / 255;
+    dest[dest_offset + 0] = br + c * cr;
+    dest[dest_offset + 1] = bg + c * cg;
+    dest[dest_offset + 2] = bb + c * cb;
+    dest[dest_offset + 3] = 0xff;
+    dest_offset += 4 * buffer.width;
 
-  c = charData[char_offset + 1] / 255;
-  dest[dest_offset + 4] = br + c * cr;
-  dest[dest_offset + 5] = bg + c * cg;
-  dest[dest_offset + 6] = bb + c * cb;
-  dest[dest_offset + 7] = 0xff;
-  dest_offset += 4 * buffer.width;
+    c = charData[char_offset + 2] / 255;
+    dest[dest_offset + 0] = br + c * cr;
+    dest[dest_offset + 1] = bg + c * cg;
+    dest[dest_offset + 2] = bb + c * cb;
+    dest[dest_offset + 3] = 0xff;
+    dest_offset += 4 * buffer.width;
+
+    c = charData[char_offset + 4] / 255;
+    dest[dest_offset + 0] = br + c * cr;
+    dest[dest_offset + 1] = bg + c * cg;
+    dest[dest_offset + 2] = bb + c * cb;
+    dest[dest_offset + 3] = 0xff;
+    dest_offset += 4 * buffer.width;
+
+    c = charData[char_offset + 6] / 255;
+    dest[dest_offset + 0] = br + c * cr;
+    dest[dest_offset + 1] = bg + c * cg;
+    dest[dest_offset + 2] = bb + c * cb;
+    dest[dest_offset + 3] = 0xff;
+  } else {
+    var c = charData[char_offset + 0] / 255;
+    dest[dest_offset + 0] = br + c * cr;
+    dest[dest_offset + 1] = bg + c * cg;
+    dest[dest_offset + 2] = bb + c * cb;
+    dest[dest_offset + 3] = 0xff;
+
+    c = charData[char_offset + 1] / 255;
+    dest[dest_offset + 4] = br + c * cr;
+    dest[dest_offset + 5] = bg + c * cg;
+    dest[dest_offset + 6] = bb + c * cb;
+    dest[dest_offset + 7] = 0xff;
+    dest_offset += 4 * buffer.width;
 
 
-  c = charData[char_offset + 2] / 255;
-  dest[dest_offset + 0] = br + c * cr;
-  dest[dest_offset + 1] = bg + c * cg;
-  dest[dest_offset + 2] = bb + c * cb;
-  dest[dest_offset + 3] = 0xff;
+    c = charData[char_offset + 2] / 255;
+    dest[dest_offset + 0] = br + c * cr;
+    dest[dest_offset + 1] = bg + c * cg;
+    dest[dest_offset + 2] = bb + c * cb;
+    dest[dest_offset + 3] = 0xff;
 
-  c = charData[char_offset + 3] / 255;
-  dest[dest_offset + 4] = br + c * cr;
-  dest[dest_offset + 5] = bg + c * cg;
-  dest[dest_offset + 6] = bb + c * cb;
-  dest[dest_offset + 7] = 0xff;
-  dest_offset += 4 * buffer.width;
-
-
-  c = charData[char_offset + 4] / 255;
-  dest[dest_offset + 0] = br + c * cr;
-  dest[dest_offset + 1] = bg + c * cg;
-  dest[dest_offset + 2] = bb + c * cb;
-  dest[dest_offset + 3] = 0xff;
-
-  c = charData[char_offset + 5] / 255;
-  dest[dest_offset + 4] = br + c * cr;
-  dest[dest_offset + 5] = bg + c * cg;
-  dest[dest_offset + 6] = bb + c * cb;
-  dest[dest_offset + 7] = 0xff;
-  dest_offset += 4 * buffer.width;
+    c = charData[char_offset + 3] / 255;
+    dest[dest_offset + 4] = br + c * cr;
+    dest[dest_offset + 5] = bg + c * cg;
+    dest[dest_offset + 6] = bb + c * cb;
+    dest[dest_offset + 7] = 0xff;
+    dest_offset += 4 * buffer.width;
 
 
-  c = charData[char_offset + 6] / 255;
-  dest[dest_offset + 0] = br + c * cr;
-  dest[dest_offset + 1] = bg + c * cg;
-  dest[dest_offset + 2] = bb + c * cb;
-  dest[dest_offset + 3] = 0xff;
+    c = charData[char_offset + 4] / 255;
+    dest[dest_offset + 0] = br + c * cr;
+    dest[dest_offset + 1] = bg + c * cg;
+    dest[dest_offset + 2] = bb + c * cb;
+    dest[dest_offset + 3] = 0xff;
 
-  c = charData[char_offset + 7] / 255;
-  dest[dest_offset + 4] = br + c * cr;
-  dest[dest_offset + 5] = bg + c * cg;
-  dest[dest_offset + 6] = bb + c * cb;
-  dest[dest_offset + 7] = 0xff;
-  dest_offset += 4 * buffer.width;
+    c = charData[char_offset + 5] / 255;
+    dest[dest_offset + 4] = br + c * cr;
+    dest[dest_offset + 5] = bg + c * cg;
+    dest[dest_offset + 6] = bb + c * cb;
+    dest[dest_offset + 7] = 0xff;
+    dest_offset += 4 * buffer.width;
+
+
+    c = charData[char_offset + 6] / 255;
+    dest[dest_offset + 0] = br + c * cr;
+    dest[dest_offset + 1] = bg + c * cg;
+    dest[dest_offset + 2] = bb + c * cb;
+    dest[dest_offset + 3] = 0xff;
+
+    c = charData[char_offset + 7] / 255;
+    dest[dest_offset + 4] = br + c * cr;
+    dest[dest_offset + 5] = bg + c * cg;
+    dest[dest_offset + 6] = bb + c * cb;
+    dest[dest_offset + 7] = 0xff;
+    dest_offset += 4 * buffer.width;
+  }
 };
 
+/**
+ * Renders the minimap into the buffer and then copies the buffer to the canvas.
+ *
+ * If the buffer could not be created (@link EditorMinimap#getBuffer) then this function
+ * performs no operations.
+ */
 EditorMinimap.prototype.render = function () {
   const store      = this.store;
   const theme      = store.editorTheme;
@@ -2546,8 +4196,8 @@ EditorMinimap.prototype.render = function () {
     line.elements.forEach (function (element) {
       if (x < width && element.style !== null && element.style !== "whitespace") {
         const color = theme[element.style];
-        for (var j = 0; j < element.original.length && x < width; j++, x += 2) {
-          EditorMinimap.renderChar (charData, buffer, x, y, element.original.charCodeAt (j), theme.background, color);
+        for (var j = 0; j < element.text.length && x < width; j++, x += 2) {
+          EditorMinimap.renderChar (charData, buffer, x, y, element.text.charCodeAt (j), theme.background, color);
         }
       } else {
         x += 2 * element.length;
@@ -2558,17 +4208,35 @@ EditorMinimap.prototype.render = function () {
   this.context.putImageData (this.buffer, 0, 0);
 };
 
+/**
+ * Callback for the {@link EditorStore#event:LinesChanged} event.
+ *
+ * This will update the layout information and then render the minimap.
+ */
 EditorMinimap.prototype.onLinesChanged = function () {
   this.updateLayout ();
   this.render ();
 };
 
+/**
+ * Callback for the {@link EditorStore#event:LineContentChanged} event.
+ *
+ * If the line whose content has changed is within the range of the visible portion
+ * of the minimap then the minimap is re-rendered.
+ *
+ * @param {EditorLine} line The line that was modified
+ */
 EditorMinimap.prototype.onLineContentChanged = function (line) {
   if (line.index >= this.lineStart && line.index <= this.lineEnd) {
     this.render ();
   }
 };
 
+/**
+ * Callback for the {@link EditorStore#event:Scroll} event.
+ *
+ * Updates the layout information and then renders the minimap.
+ */
 EditorMinimap.prototype.onScroll = function () {
   this.updateLayout ();
   this.render ();
@@ -2600,7 +4268,7 @@ var EditorRenderMinimapSlider = React.createClass ({
     const desired = Math.min (minimap.sliderMaxTop, Math.max (0, this.state.startTop + delta));
 
     if (minimap.sliderRatio > 0) {
-      minimap.store.onScroll (Math.round (desired / minimap.sliderRatio));
+      minimap.store.onScroll (Math.round (desired / minimap.sliderRatio), true);
     }
   },
 
@@ -2753,8 +4421,9 @@ var Editor = React.createClass ({
 
   updateFromCharGuide: function () {
     const guide = this.refs.charGuide;
-    this.props.store.setLineHeight (guide.clientHeight);
-    this.props.store.setCharWidth (guide.getBoundingClientRect ().width / 2);
+    const crect = guide.getBoundingClientRect ();
+    this.props.store.setLineHeight (crect.height);
+    this.props.store.setCharWidth (crect.width / 2);
   },
 
   updateFromViewHeight: function () {

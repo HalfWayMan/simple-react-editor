@@ -74,12 +74,13 @@ div.editor {
     background-color: #1e1e1e;
     cursor: text;
     overflow-x: auto;
+    overflow-y: hidden;
 
     div.line {
       position: absolute;
       width: 100%;
       color: #d4d4c8;
-      height: @editor-line-height * @editor-font-size;
+      //height: @editor-line-height * @editor-font-size;
       white-space: pre;
       .fixed-mixin();
       .noselect();
@@ -157,7 +158,7 @@ div.editor {
     top: 0;
     left: 0;
     width: 2px;
-    height: @editor-line-height * @editor-font-size;
+    //height: @editor-line-height * @editor-font-size;
     background-color: #fff;
     z-index: 200;
     .fixed-mixin();
@@ -179,7 +180,7 @@ div.editor {
   div.selection-block {
     position: absolute;
     min-width: 0.5em;
-    height: (@editor-line-height * @editor-font-size) + 1;
+    //height: (@editor-line-height * @editor-font-size) + 1;
     z-index: 100;
     background-color: #1a5a87;
     border-radius: 2px;
