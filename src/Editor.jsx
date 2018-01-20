@@ -334,9 +334,9 @@ EditorPosition.prototype.isBeforeOrEqual = function (other) {
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
 /**
- * A range in the editor.
+ * A region in the editor.
  *
- * A range is described by a start line and column and an end line and column.
+ * A region is described by a start line and column and an end line and column.
  *
  * @constructor
  * @param {number} start_line
@@ -344,40 +344,40 @@ EditorPosition.prototype.isBeforeOrEqual = function (other) {
  * @param {number} end_line
  * @param {number} end_col
  */
-var EditorRange = function (start_line, start_col, end_line, end_col) {
+var EditorRegion = function (start_line, start_col, end_line, end_col) {
   this.set (start_line, start_col, end_line, end_col);
 };
 
 /**
- * Clone this range.
- * @returns {EditorRange} A new range with the same location
+ * Clone this region.
+ * @returns {EditorRegion} A new region with the same location
  */
-EditorRange.prototype.clone = function () {
-  return new EditorRange (this.start_line, this.start_column, this.end_line, this.end_column);
+EditorRegion.prototype.clone = function () {
+  return new EditorRegion (this.start_line, this.start_column, this.end_line, this.end_column);
 };
 
 /**
- * Return a string representation of the range.
+ * Return a string representation of the region.
  *
  * @example
- * new EditorRange (1, 100, 2, 4).toString ();
+ * new EditorRegion (1, 100, 2, 4).toString ();
  * // result: "[1:100,2:4]"
  *
  * @returns {string}
  */
-EditorRange.prototype.toString = function () {
+EditorRegion.prototype.toString = function () {
   return "[" + this.start_line + ":" + this.start_column + "," + this.end_line + ":" + this.end_column + "]";
 };
 
 /**
- * Set this range to the given arguments.
+ * Set this region to the given arguments.
  *
  * @param {number} start_line
  * @param {number} start_col
  * @param {number} end_line
  * @param {number} end_col
  */
-EditorRange.prototype.set = function (start_line, start_col, end_line, end_col) {
+EditorRegion.prototype.set = function (start_line, start_col, end_line, end_col) {
   if ((start_line > end_line) || (start_line === end_line && start_col > end_col)) {
     this.start_line   = end_line;
     this.start_column = end_col;
@@ -392,56 +392,60 @@ EditorRange.prototype.set = function (start_line, start_col, end_line, end_col) 
 };
 
 /**
- * Create an empty range from the given position. The start and end of the returned range
+ * Create an empty region from the given position. The start and end of the returned region
  * are the same position.
  *
- * @param {EditorPosition} position The position to create a range from
- * @returns {EditorRange}
+ * @param {EditorPosition} position The position to create a region from
+ * @returns {EditorRegion}
  */
-EditorRange.fromPosition = function (position) {
-  return new EditorRange (position.line, position.column, position.line, position.column);
+EditorRegion.fromPosition = function (position) {
+  return new EditorRegion (position.line, position.column, position.line, position.column);
+};
+
+EditorRegion.fromPositions = function (start, end) {
+  return new EditorRegion (start.line, start.column, end.line, end.column);
 };
 
 /**
- * Get the start row and column of this range as an `EditorPosition`.
+ * Get the start row and column of this region as an `EditorPosition`.
  * @returns {EditorPosition}
  */
-EditorRange.prototype.getStartLocation = function () {
+EditorRegion.prototype.getStartLocation = function () {
   return new EditorPosition (this.start_line, this.start_column);
 };
 
 /**
- * Get the end row and column of this range as an `EditorPosition`.
+ * Get the end row and column of this region as an `EditorPosition`.
  * @returns {EditorPosition}
  */
-EditorRange.prototype.getEndLocation = function () {
+EditorRegion.prototype.getEndLocation = function () {
   return new EditorPosition (this.end_line, this.end_column);
 };
 
 /**
- * Set the start location of this range.
+ * Set the start location of this region.
  * @param {EditorPosition} location
  */
-EditorRange.prototype.setStartLocation = function (location) {
+EditorRegion.prototype.setStartLocation = function (location) {
   this.start_line   = location.line;
   this.start_column = location.column;
 };
 
 /**
- * Set the end location of this range.
+ * Set the end location of this region.
  * @param {EditorPosition} location
  */
-EditorRange.prototype.setEndLocation = function (location) {
+EditorRegion.prototype.setEndLocation = function (location) {
   this.end_line   = location.line;
   this.end_column = location.column;
 };
 
 /**
- * Test whether this range contains the given position
+ * Test whether this region contains the given position
  * @param {EditorPosition} location
- * @returns {boolean} Whether the location is contained within the range
+ * @returns {boolean} Whether the location is contained within the region
  */
-EditorRange.prototype.contains = function (location) {
+EditorRegion.prototype.contains = function (location) {
   if (location.line < this.start_line || location.line > this.end_line) {
     return false;
   }
@@ -871,19 +875,19 @@ EditorLine.prototype.contains = function (what) {
 
 /**
  * Test whether the line contains the given string or regular expression in the
- * given range.
+ * given region.
  *
  * @param {string|RegExp} what  String or regular expression to test
  * @param {number}        start Start index
  * @param {number}        end   End index
- * @returns {boolean} whether the sub-range contains the given value
+ * @returns {boolean} whether the sub-region contains the given value
  */
-EditorLine.prototype.containsInRange = function (what, start, end) {
-  var in_range = this.content.substr (start, end - start);
+EditorLine.prototype.containsInRegion = function (what, start, end) {
+  var in_region = this.content.substr (start, end - start);
   if (typeof what === "string") {
-    return in_range.indexOf (what) !== -1;
+    return in_region.indexOf (what) !== -1;
   } else if (what instanceof RegExp) {
-    return what.exec (in_range) !== null;
+    return what.exec (in_region) !== null;
   }
 };
 
@@ -896,11 +900,19 @@ EditorLine.prototype.getLength = function () {
 };
 
 /**
- * Returns a range that encloses this line.
- * @returns {EditorRange} A range that encloses this line
+ * Returns a region that encloses this line.
+ * @returns {EditorRegion} A region that encloses this line
  */
-EditorLine.prototype.getRange = function () {
-  return new EditorRange (this.index, 0, this.index, this.getLength ());
+EditorLine.prototype.getRegion = function () {
+  return new EditorRegion (this.index, 0, this.index, this.getLength ());
+};
+
+/**
+ * Returns a region that encloses this line and the start of the next line (like selecting a line).
+ * @returns {EditorRegion} A region that encloses this line completed
+ */
+EditorLine.prototype.getRegionSpan = function () {
+  return new EditorRegion (this.index, 0, this.index + 1, 0);
 };
 
 /**
@@ -1124,7 +1136,7 @@ EditorLine.prototype.findPreviousWordStart = function (start, recurse) {
   const result = /\W*\w+/.exec (prefix);
 
   if (result) {
-    return new EditorPosition (this, index, start - result[0].length);
+    return new EditorPosition (this.index, start - result[0].length);
   } else return recurse ? this.getPrevious ().findPreviousWordStart (null, true) : null;
 };
 
@@ -1237,9 +1249,9 @@ var EditorSelection = function (start) {
 
   /**
    * The region described by this selection
-   * @type {EditorRange}
+   * @type {EditorRegion}
    */
-  this.region = EditorRange.fromPosition (start);
+  this.region = EditorRegion.fromPosition (start);
 };
 
 /**
@@ -1256,17 +1268,19 @@ EditorSelection.prototype.adjustForCursor = function (location) {
   }
 };
 
-EditorSelection.prototype.expandToInclude = function (location) {
-
-}
-
 /**
- * Create a new selection fromt he given range.
- * @param {EditorRange} range The range for the new selection
+ * Create a new selection fromt he given region.
+ * @param {EditorRegion} region The region for the new selection
  */
-EditorSelection.fromRange = function (range) {
-  var selection = new EditorSelection (range.getStartLocation ());
-  selection.region = range.clone ();
+EditorSelection.fromRegion = function (region) {
+  var selection = new EditorSelection (region.getStartLocation ());
+  selection.region = region.clone ();
+  return selection;
+};
+
+EditorSelection.fromPositions = function (start, end) {
+  var selection = new EditorSelection (start);
+  selection.region = EditorRegion.fromPositions (start, end);
   return selection;
 };
 
@@ -1381,7 +1395,7 @@ EditorCursor.prototype.getLine = function () {
  *
  * The line the cursor is moved to is clamped within the number of lines
  * which are in the parent {@link EditorStore} to make sure that cursors
- * are not moved outside of the valid range.
+ * are not moved outside of the valid region.
  *
  * If the cursor line is changed, then the {@link EditorCursor#event:LineChanged}
  * is fired (via {@link EditorCursor#onLineChanged}) after which the
@@ -1410,7 +1424,7 @@ EditorCursor.prototype.setLine = function (line) {
  * Set the column for this cursor.
  *
  * The column of the cursor is clamped within the current line to ensure
- * that the cursor does not move outside a valid range.
+ * that the cursor does not move outside a valid region.
  *
  * If the cursor column is changed, then the {@link EditorCursor#event:ColumnChanged}
  * is fired (via {@link EditorCursor#onColumnChanged}) after which the
@@ -1702,7 +1716,7 @@ EditorCursor.prototype.insertTab = function () {
   var prev   = line.getPrevious ();
   var indent = prev ? prev.indent : 0;
 
-  if (indent && this.position.column < indent && line.containsInRange (/^\s*$/, 0, this.position.column)) {
+  if (indent && this.position.column < indent && line.containsInRegion (/^\s*$/, 0, this.position.column)) {
     this.insertText (new Array (indent + 1).join (' '));
   } else {
     var tab_offset = this.position.column % this.store.config.tabSize;
@@ -1821,11 +1835,24 @@ EditorCursor.prototype.selectLine = function (line) {
     line = this.getLine ();
   }
 
-  this.selection       = EditorSelection.fromRange (line.getRange ());
+  this.selection       = EditorSelection.fromRegion (line.getRegionSpan ());
   this.position.line   = line.index + 1;
   this.position.column = 0;
   this.onChanged ();
 };
+
+EditorCursor.prototype.selectWord = function () {
+  const line       = this.getLine ();
+  const word_start = line.findPreviousWordStart (this.position.column, false);
+  const word_end   = line.findNextWordEnd (this.position.column, false);
+
+  if (word_start && word_end) {
+    this.selection = EditorSelection.fromPositions (word_start, word_end);
+    this.position.column = word_end.column;
+    this.onSelectionChanged ();
+    this.onChanged ();
+  }
+}
 
 /**
  * Remove the selection
@@ -1839,23 +1866,40 @@ EditorCursor.prototype.removeSelection = function () {
 
 EditorCursor.prototype.deleteSelected = function () {
   if (this.selection) {
-    this.store.removeSelection (this.selection);
+    this.store.removeRegion (this.selection.region);
     this.setLocation (this.selection.region.getStartLocation ());
     this.removeSelection ();
   }
 };
 
+/**
+ * Copy the selected region to the clipboard.
+ *
+ * If no region has been selected then this method will copy the
+ * entire line.
+ *
+ * @param {boolean} [cut] Whether to remove selection after copying
+ */
 EditorCursor.prototype.copySelected = function (cut) {
   if (this.selection) {
-    var lines = this.store.acquireSelectionContent (this.selection);
+    var lines = this.store.acquireRegionContent (this.selection.region);
     this.clipboard.write (lines.join ('\n'));
 
     if (cut) {
       this.deleteSelected ();
     }
+  } else {
+    this.clipboard.write (this.getLine ().content);
+    if (cut) {
+      this.store.deleteLine (this.position.line);
+      this.setColumn (0);
+    }
   }
 };
 
+/**
+ * Paste the clipboard contents stored against this cursor at the current location.
+ */
 EditorCursor.prototype.paste = function () {
   var content = this.clipboard.read ();
 
@@ -1873,7 +1917,6 @@ EditorCursor.prototype.paste = function () {
     }
   }
 };
-
 
 /**
  * Test if the cursor is next to an encapsulator
@@ -3074,32 +3117,32 @@ EditorSyntaxEngine.JavaScript = {
 
 /**
  * @constructor
- * @param {EditorStore} store The store to which this indent ranges collection belongs
+ * @param {EditorStore} store The store to which this indent regions collection belongs
  */
-var EditorIndentRanges = function (store) {
+var EditorIndentRegions = function (store) {
   this.store  = store;
-  this.ranges = [];
+  this.regions = [];
 
-  this.Changed = new EditorEvent ("EditorIndentRanges.Changed");
+  this.Changed = new EditorEvent ("EditorIndentRegions.Changed");
   this.update ();
 };
 
 /**
  *
  */
-EditorIndentRanges.prototype.update = function () {
+EditorIndentRegions.prototype.update = function () {
   var store  = this.store;
-  var ranges = [];
+  var regions = [];
 
   this.store.lines.forEach (function (line) {
     if (line.indent > 0) {
       var index = line.indent / store.config.tabSize;
 
       for (var column = 0; column < index; column++) {
-        if (column > ranges.length - 1) {
-          ranges.push ([{ start: line.index, end: line.index }]);
+        if (column > regions.length - 1) {
+          regions.push ([{ start: line.index, end: line.index }]);
         } else {
-          var blocks = ranges[column];
+          var blocks = regions[column];
           var block  = blocks[blocks.length - 1];
 
           if (block.end === line.index - 1) {
@@ -3113,7 +3156,7 @@ EditorIndentRanges.prototype.update = function () {
       }
     } else if (line.content.length === 0 || line.contains (/^\s*$/)) {
       /* Extend all blocks from previous line through this blank line */
-      ranges.forEach (function (blocks) {
+      regions.forEach (function (blocks) {
         var last_block = blocks[blocks.length - 1];
         if (last_block.end === line.index - 1) {
           last_block.end = line.index;
@@ -3122,14 +3165,20 @@ EditorIndentRanges.prototype.update = function () {
     }
   });
 
-  this.ranges = ranges;
+  this.regions = regions;
 };
 
 /**
  *
  */
-EditorIndentRanges.prototype.onChanged = function () {
+EditorIndentRegions.prototype.onChanged = function () {
   this.Changed.fire ();
+};
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
+var EditorLinesDelta = function (region) {
+  this.region = region;
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
@@ -3204,7 +3253,7 @@ var EditorStore = function (config, initial) {
   this.scrollTop    = 0;
   this.viewHeight   = 0;
   this.nextLineId   = new EditorIdGenerator ();
-  this.indentRanges = new EditorIndentRanges (this);
+  this.indentRegions = new EditorIndentRegions (this);
   this.syntaxEngine = this.config.syntax ? new EditorSyntaxEngine (this.config.syntax) : null;
   this.editorTheme  = new EditorThemeColors ();
   this.loading      = false;
@@ -3259,7 +3308,7 @@ EditorStore.prototype.deserialize = function (obj) {
   }
 
   this.loading = false;
-  this.indentRanges.update ();
+  this.indentRegions.update ();
 };
 
 /**
@@ -3327,10 +3376,11 @@ EditorStore.prototype.insertLine = function (index, line) {
 /**
  * Delete a line at the given index from the store.
  *
- * @param {number} index The index of the line to delete
+ * @param {number} index   The index of the line to delete
+ * @param {number} [count] The number of lines to remove
  */
-EditorStore.prototype.deleteLine = function (index) {
-  this.lines.splice (index, 1);
+EditorStore.prototype.deleteLine = function (index, count) {
+  this.lines.splice (index, count || 1);
   this.renumerateLines ();
   this.onLinesChanged ();
 };
@@ -3506,12 +3556,11 @@ EditorStore.prototype.findLineContains = function (what) {
 };
 
 /**
- * Extract the content from the store for the given selection.
- * @param {EditorSelection} selection The selection to extract
+ * @param {EditorRegion} region The region to extract
+ * @returns {string[]}
  */
-EditorStore.prototype.acquireSelectionContent = function (selection) {
-  const region  = selection.region;
-  var   content = [];
+EditorStore.prototype.acquireRegionContent = function (region) {
+  var content = [];
 
   for (var i = region.start_line; i <= region.end_line; i++) {
     const line  = this.lines[i];
@@ -3523,43 +3572,28 @@ EditorStore.prototype.acquireSelectionContent = function (selection) {
   return content;
 };
 
-EditorStore.prototype.removeSelection = function (selection) {
-  const region       = selection.region;
-  var   start_col    = region.start_column;
-  var   remove_start = -1;
-  var   remove_end   = -1;
-
-  for (var i = region.start_line; i <= region.end_line; i++) {
-    const line    = this.lines[i];
-    const end_col = i === region.end_line ? region.end_column : line.getLength ();
-
-    if (start_col === 0 && end_col === line.getLength ()) {
-      /* The entire line is encompassed by the selection */
-      if (remove_start === -1) {
-        remove_start = i;
-      }
-
-      remove_end = Math.max (remove_end, i);
-    } else {
-      /* Only part of the line is encompassed by the selection */
-      line.deleteText (start_col, end_col - start_col);
+/**
+ * @param {EditorRegion} region The region to remove
+ */
+EditorStore.prototype.removeRegion = function (region) {
+  if (region.start_line === region.end_line) {
+    this.lines[region.start_line].deleteText (region.start_column, region.end_column - region.start_column);
+  } else {
+    if (region.end_column === 0) {
+      region.end_line--;
+      region.end_column = this.lines[region.end_line].getLength ();
     }
 
-    /* Subsequent selected lines start at first column */
-    start_col = 0;
-  }
+    const start_line = this.lines[region.start_line];
+    const end_line   = this.lines[region.end_line];
+    const merged     = start_line.content.substring (0, region.start_column) + end_line.content.substring (region.end_column);
 
-  /* Remove the lines that we marked for removal */
-  if (remove_start !== -1) {
-    this.lines.splice (remove_start, (remove_end - remove_start) + 1);
-
-    const target = this.lines[region.start_line];
-    const source = this.lines[region.start_line + 1];
-    target.appendText (source.content);
-    this.lines.splice (region.start_line + 1, 1);
-
-    this.renumerateLines ();
-    this.onLinesChanged ();
+    this.deleteLine (region.start_line, region.end_line - region.start_line + 1);
+    if (merged.length > 0) {
+      const merge_line = new EditorLine (this, null, "", true);
+      this.insertLine (region.start_line, merge_line);
+      merge_line.setContent (merged);
+    }
   }
 };
 
@@ -3636,14 +3670,14 @@ EditorStore.prototype.onCursorChanged = function (cursor) {
 
 /**
  * Fire the {@link EditorStore#event:LinesChanged} event and call the
- * {@link EditorIndentRanges#update} method on the `indentRanges` property
- * to update the indentation range blocks.
+ * {@link EditorIndentRegions#update} method on the `indentRegions` property
+ * to update the indentation region blocks.
  *
  * @fires EditorStore#LinesChanged
  */
 EditorStore.prototype.onLinesChanged = function () {
   this.LinesChanged.fire ();
-  this.indentRanges.update ();
+  this.indentRegions.update ();
 };
 
 /**
@@ -3664,8 +3698,8 @@ EditorStore.prototype.onCharWidthChanged = function () {
 
 /**
  * Fires the {@link EditorStore#event:LineContentChanged} event and calls
- * the {@link EditorIndentRanges#update} method on the `indentRanges` property
- * to update the indentation range blocks.
+ * the {@link EditorIndentRegions#update} method on the `indentRegions` property
+ * to update the indentation region blocks.
  *
  * The {@link EditorStore#event:LineContentChanged} event is passed the
  * {@link EditorLine} argument from this method.
@@ -3675,7 +3709,7 @@ EditorStore.prototype.onCharWidthChanged = function () {
 EditorStore.prototype.onLineContentChanged = function (line) {
   this.LineContentChanged.fire (line);
   if (!this.loading) {
-    this.indentRanges.update ();
+    this.indentRegions.update ();
   }
 };
 
@@ -3867,7 +3901,6 @@ var EditorRenderCursorSelection = React.createClass ({
   },
 
   onSelectionChanged: function () {
-    console.log ("EditorRenderCursorSelection.onSelectionChanged", this.props.cursor.primary);
     this.computeLineBlocks ();
     this.forceUpdate ();
   },
@@ -4009,12 +4042,12 @@ var EditorRenderLine = React.createClass ({
   }
 });
 
-var EditorRenderIndentRanges = React.createClass ({
+var EditorRenderIndentRegions = React.createClass ({
   propTypes: {
-    ranges: React.PropTypes.instanceOf (EditorIndentRanges).isRequired
+    regions: React.PropTypes.instanceOf (EditorIndentRegions).isRequired
   },
 
-  onRangesChanged: function () {
+  onRegionsChanged: function () {
     this.forceUpdate ();
   },
 
@@ -4023,25 +4056,25 @@ var EditorRenderIndentRanges = React.createClass ({
   },
 
   componentDidMount: function () {
-    this.props.ranges.Changed.bindTo (this, this.onRangesChanged);
-    this.props.ranges.store.CharWidthChanged.bindTo (this, this.onDimensionsChanged);
-    this.props.ranges.store.LineHeightChanged.bindTo (this, this.onDimensionsChanged);
+    this.props.regions.Changed.bindTo (this, this.onRegionsChanged);
+    this.props.regions.store.CharWidthChanged.bindTo (this, this.onDimensionsChanged);
+    this.props.regions.store.LineHeightChanged.bindTo (this, this.onDimensionsChanged);
   },
 
   componentWillUnmount: function () {
-    this.props.ranges.Changed.unbindFrom (this);
-    this.props.ranges.store.CharWidthChanged.unbindFrom (this);
-    this.props.ranges.store.LineHeightChanged.unbindFrom (this);
+    this.props.regions.Changed.unbindFrom (this);
+    this.props.regions.store.CharWidthChanged.unbindFrom (this);
+    this.props.regions.store.LineHeightChanged.unbindFrom (this);
   },
 
   render: function () {
-    const store     = this.props.ranges.store;
+    const store     = this.props.regions.store;
     const tab_size  = store.config.tabSize;
-    const ranges    = this.props.ranges.ranges;
+    const regions    = this.props.regions.regions;
     const last_line = store.getScrollBottomLine ();
-    const columns   = ranges.map (function (range, column) {
+    const columns   = regions.map (function (region, column) {
       const left    = column * tab_size * store.charWidth;
-      const blocks  = range.filter (function (block) {
+      const blocks  = region.filter (function (block) {
         return block.start <= last_line;
       }).map (function (block, index) {
         return <div key={index} style={{ left: left, top: block.start * store.lineHeight, height: (1 + (block.end - block.start)) * store.lineHeight }}/>;
@@ -4050,7 +4083,7 @@ var EditorRenderIndentRanges = React.createClass ({
       return <div key={column}>{blocks}</div>;
     });
 
-    return <div className="indent-indicator-ranges">{columns}</div>;
+    return <div className="indent-indicator-regions">{columns}</div>;
   }
 });
 
@@ -4097,7 +4130,12 @@ var EditorRenderLines = React.createClass ({
 
     this.tripleTimeout = window.setTimeout (function () {
       this.tripleTimeout = null;
-    }.bind (this), 300);
+
+      const cursors = this.props.store.cursors;
+      cursors.removeSecondary ();
+      cursors.primary.selectWord ();
+
+    }.bind (this), 150);
   },
 
   onViewTripleClicked: function (event) {
@@ -4153,7 +4191,7 @@ var EditorRenderLines = React.createClass ({
            onClick={this.onViewClick}
            onDoubleClick={this.onViewDoubleClick}>
         {lines}
-        <EditorRenderIndentRanges ranges={store.indentRanges} />
+        <EditorRenderIndentRegions regions={store.indentRegions} />
         <EditorRenderCursorContainer cursors={store.cursors} />
       </div>
     );
@@ -4491,7 +4529,7 @@ EditorMinimap.prototype.onLinesChanged = function () {
 /**
  * Callback for the {@link EditorStore#event:LineContentChanged} event.
  *
- * If the line whose content has changed is within the range of the visible portion
+ * If the line whose content has changed is within the region of the visible portion
  * of the minimap then the minimap is re-rendered.
  *
  * @param {EditorLine} line The line that was modified
