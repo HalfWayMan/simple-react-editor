@@ -692,7 +692,9 @@ EditorThemeColors.prototype.onChanged = function () {
 /**
  * @constructor
  */
-var EditorLineMarker = function () {
+var EditorLineMarker = function (component, props) {
+  this.component = component;
+  this.props     = props || {};
 };
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
@@ -3793,11 +3795,32 @@ var EditorRenderLineNumbers = React.createClass ({
 
 var EditorRenderGutterMarker = React.createClass ({
   propTypes: {
-    marker: React.PropTypes.instanceOf (EditorLineMarker)
+    line: React.PropTypes.instanceOf (EditorLine).isRequired
+  },
+
+  onMarkerChanged: function () {
+    this.forceUpdate ();
+  },
+
+  componentDidMount: function () {
+    this.props.line.MarkerChanged.bindTo (this, this.onMarkerChanged);
+  },
+
+  componentWillUnmount: function () {
+    this.props.line.MarkerChanged.unbindFrom (this);
   },
 
   render: function () {
-    return <span>M</span>;
+    const line  = this.props.line;
+    const store = line.store;
+
+    if (line.marker) {
+      return (
+        <div className="gutter-element" style={{ left: 0, top: line.index * store.lineHeight, width: store.charWidth, height: store.lineHeight }}>
+          {React.createElement (line.marker.component, Object.assign ({ line: line }, line.marker.props))}
+        </div>
+      );
+    } else return null;
   }
 });
 
@@ -3832,11 +3855,11 @@ var EditorRenderGutter = React.createClass ({
     if (store.config.gutter) {
       const width    = store.config.lineNumbers ? store.getLineNumberCharWidth () : 0;
       const elements = store.lines.map (function (line, index) {
-        if (line.marker) {
-          return <div key={index}><EditorRenderGutterMarker marker={line.marker} /></div>;
-        } else {
-          return null;
-        }
+        // if (line.marker) {
+          return <div key={index}><EditorRenderGutterMarker line={line} /></div>;
+        // } else {
+        //   return null;
+        // }
       });
 
       return <div ref="gutter" className="gutter" style={{ left: width + "em", height: store.lines.length * store.lineHeight }}>{elements}</div>;

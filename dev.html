@@ -6,6 +6,7 @@
     <script type="text/javascript" src="https://agent.sulusoftware.co.uk/static/lib/react/react-with-addons-0.14.2.js"></script>
     <script type="text/javascript" src="https://agent.sulusoftware.co.uk/static/lib/react/react-dom-0.14.2.js"></script>
     <link rel="stylesheet/less" type="text/css" href="src/Editor.less" />
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/less.js/2.7.3/less.js"></script>
   </head>
   <body>
@@ -30,7 +31,14 @@
             throw new Error ("Store has already been created!");
           }
 
+          var my_component = React.createClass ({
+            render: function () {
+              return React.createElement ("i", { className: "fa fa-hand-o-right" });
+            }
+          });
+
           window.store = store = new EditorStore (config, content);
+          store.lines[0].setMarker (new EditorLineMarker (my_component));
           ReactDOM.render (factory ({ store: store }, null), document.getElementById ("container"));
         }
 

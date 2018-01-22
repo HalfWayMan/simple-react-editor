@@ -164,8 +164,6 @@
           <p>Automatic indentation is supported with soft and hard tab support and configurable tab sizes. Indentation guides are also rendered as a visual aid. <a href="#auto-indent">More &hellip;</a></p>
           <h3 class="roboto">Encapsulator Highlighting</h3>
           <p>Moving the cursor next to an encapsulation character will highlight the corresponding open/close character. <a href="#encapsulator">More &hellip;</a></p>
-          <h3 class="roboto">Simple Semantic Engine</h3>
-          <p>Providing support for contextual-aware code guides such as automatic encapsulator insertion and code-folding. <a href="#semantics">More &hellip;</a></p>
           <h3 class="roboto">Line Gutter</h3>
           <p>Customizable <a href="#" class="code-ref" data-ref="var EditorRenderGutter">line gutter</a> components for line indicators <a href="#line-gutter">More &hellip;</a></p>
           <h3 class="roboto">Simple CSS-based Styling</h3>
@@ -204,6 +202,11 @@
       </div>
     </div>
     <a href="https://github.com/HalfWayMan/simple-react-editor"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/365986a132ccd6a44c23a9169022c0b5c890c387/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f7265645f6161303030302e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_red_aa0000.png"></a>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+    <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+    <script type="text/javascript">
+
+    </script>
     <script type="text/javascript" src="Editor.js"></script>
     <script type="text/javascript">
       (function () {
@@ -231,6 +234,34 @@
           );
         }
 
+        var LineVisited = React.createClass ({
+          componentDidMount: function () {
+            this.refs.icon.setAttribute ("data-toggle", "tooltip");
+            this.refs.icon.setAttribute ("data-placement", "top");
+          },
+
+          render: function () {
+            return React.createElement ("i", { ref: "icon", className: "fa fa-circle", title: this.props.title, style: { color: "#337ab7" } });
+          }
+        });
+
+        function findClosestHeading (element) {
+          var parents = $(element).parents ();
+          for (var i = 0; i < parents.length; i++) {
+            var heading = $(parents[i]).prev ("h2,h3");
+            if (heading.length > 0) {
+              return heading[0].innerText;
+            } else {
+              heading = $(parents[i]).find ("h2,h3");
+              if (heading.length > 0) {
+                return heading[0].innerText;
+              }
+            }
+          }
+
+          return null;
+        }
+
         if (load_own_source) {
           createEditor (atob (own_source));
 
@@ -244,6 +275,16 @@
               anchor.setAttribute ("title", "Goto Line " + (1 + line) + " in editor");
               anchor.setAttribute ("data-toggle", "tooltip");
               anchor.setAttribute ("data-placement", "top");
+
+              if (store.lines[line].marker === null) {
+                var content = "<b>Referenced Code Point</b>";
+                var heading = findClosestHeading (anchor);
+                if (heading) {
+                  content += "<br>in <i>" + heading + "</i>";
+                }
+
+                store.lines[line].setMarker (new EditorLineMarker (LineVisited, { title: content }));
+              }
 
               EditorTools.listen (anchor, "click", function (event) {
                 event.preventDefault ();
@@ -284,12 +325,9 @@
             }).join ("");
           }).join ("<br>");
         });
+
+        $('[data-toggle="tooltip"]').tooltip ({ container: "body", html: true });
       }) ();
-    </script>
-    <script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
-    <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
-    <script type="text/javascript">
-      $('[data-toggle="tooltip"]').tooltip ()
     </script>
   </body>
 </html>
