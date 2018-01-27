@@ -1,0 +1,252 @@
+$editor-font-size:       14px;
+$editor-line-height:     1.42857143;
+
+$editor-background:      #1e1e1e;
+$editor-border-color:    #eeeeee;
+$editor-line-numbers:    #adadad;
+$editor-gutter-element:  #ffffff;
+$editor-text-color:      #d4d4c8;
+$editor-active-line:     #3d3d3d;
+$editor-indent-guide:    #353535;
+
+
+@mixin fixed-family() {
+  font-family: monospace;
+}
+
+@mixin no-select() {
+  /* https://stackoverflow.com/questions/826782/how-to-disable-text-selection-highlighting */
+  -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome and Opera */
+}
+
+
+div.editor {
+  position:    relative;
+  width:       100%;
+  height:      100%;
+  border:      1px solid $editor-border-color;
+  line-height: $editor-line-height;
+  overflow-y:  auto;
+
+  &:focus {
+    outline:   none;
+  }
+
+
+  div.char-guide {
+    position:    absolute;
+    left:        0;
+    visibility:  none;
+    @include fixed-family();
+  }
+
+
+  div.line-numbers {
+    position:         absolute;
+    top:              0;
+    left:             0;
+    min-width:        1em;
+    min-height:       100%;
+    background-color: $editor-background;
+    overflow-y:       hidden;
+    color:            $editor-line-numbers;
+    text-align:       right;
+    @include fixed-family();
+    @include no-select();
+
+    span {
+      position:       absolute;
+      width:          100%;
+      left:           0;
+    }
+  }
+
+
+  div.gutter {
+    position:         absolute;
+    top:              0;
+    left:             0;
+    width:            1em;
+    min-height:       100%;
+    background-color: $editor-background;
+    overflow-y:       hidden;
+    @include no-select();
+
+    div.gutter-element {
+      position:       absolute;
+      color:          $editor-gutter-element;
+    }
+  }
+
+
+  div.lines {
+    position:         absolute;
+    top:              0;
+    left:             0;
+    right:            0;
+    min-height:       100%;
+    background-color: $editor-background;
+    cursor:           text;
+    overflow-x:       auto;
+    overflow-y:       hidden;
+
+    div.line {
+      position:       absolute;
+      width:          100%;
+      color:          $editor-text-color;
+      white-space:    pre;
+      @include fixed-family();
+      @include no-select();
+
+      &.current-line {
+        &:before, &:after {
+          position:   absolute;
+          left:       0;
+          width:      100%;
+          content:    '';
+        }
+
+        &:before {
+          top:           0;
+          border-top:    1px solid $editor-active-line;
+        }
+
+        &:after {
+          bottom:        0;
+          border-bottom: 1px solid $editor-active-line;
+        }
+      }
+    }
+
+    span {
+      position:       relative;
+      z-index:        200;
+
+      &.comment {
+        color:      #45804e;
+      }
+
+      &.reserved {
+        color:      #4688bf;
+      }
+
+      &.identifier {
+        color:      #98cbeb;
+      }
+
+      &.typename {
+        color:      #42c399;
+      }
+
+      &.string {
+        color:      #b28d6c;
+      }
+
+      &.string_escape {
+        color:      #beb87e;
+      }
+
+      &.number {
+        color:      #abc89f;
+      }
+
+      &.regexp {
+        color:      #cb6664;
+      }
+    }
+
+
+    div.indent-indicator-regions {
+      div { /* column */
+        div { /* block */
+          position:    absolute;
+          border-left: 1px solid $editor-indent-guide;
+        }
+      }
+    }
+  }
+
+
+  div.cursor {
+    position:         absolute;
+    top:              0;
+    left:             0;
+    width:            2px;
+    background-color: #fff;
+    z-index:          200;
+    @include fixed-family();
+
+    &.secondary {
+      background-color: #aaa;
+    }
+  }
+
+
+  div.encapsulator-marker {
+    position:         absolute;
+    border:           1px solid #aaa;
+
+    &.match {
+      border-color:   #888;
+    }
+  }
+
+
+  div.selection-block {
+    position:         absolute;
+    min-width:        0.5em;
+    z-index:          100;
+    background-color: #1a5a87;
+    border-radius:    2px;
+
+    &:last-child {
+      min-width:      0;
+    }
+  }
+
+
+  div.minimap {
+    position:         absolute;
+    top:              0;
+    right:            0;
+    width:            100px;
+    min-height:       100%;
+    background-color: #1e1e1e;
+    overflow:         hidden;
+    border-left:      1px solid black;
+    box-shadow:       -1px 0px 10px 0px rgba(0,0,0,0.6);
+    @include no-select();
+
+    canvas {
+      width:          100%;
+      height:         100%;
+      @include no-select();
+    }
+
+    div.slider {
+      position:         absolute;
+      left:             0;
+      right:            0;
+      opacity:          0;
+      cursor:           move;
+      background-color: #888;
+      transition:       opacity 100ms linear;
+
+      &:hover, &.active {
+        opacity:        0.6 !important;
+      }
+    }
+
+    &:hover {
+      div.slider {
+        opacity:        0.5;
+      }
+    }
+  }
+}

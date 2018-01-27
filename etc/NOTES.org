@@ -1,0 +1,42 @@
+#+TITLE: Basic React Editor
+
+* TODO Correctly handle cut-and-paste
+  Seems that when pasting more than one line the editor is not behaving as it should
+* TODO Clipboard integration
+* TODO Code folding
+  Given detection of fold regions (possibly from  the indentation guides), allow subsequent lines to
+  be folded into  a single line. E.g. we  have a new property in =EditorLine=  called something like
+  =children= that contains an array of subsequent lines that have been folded under it.
+
+  We can then mark lines that are folded and have children with a CSS class (e.g. =folded=) which we
+  then use to style differently.
+
+  Also need to  think about the =[...]= indicator at  the end of the line and  handling the event of
+  clicking upon it: this will expand the collapsed region.
+
+  When we move the cursor past the end of a collapsed region, we need to expand the region.
+* TODO Line numbering like line rendering
+  Currently  we are  just blitting  all  the lines  in a  big string.  This  was okay  when we  were
+  struggling under  rendering all  the lines at  once. Now  that we are  only rendering  the visible
+  lines, we should do the same with the line numbers. E.g.:
+
+  #+BEGIN_SRC javascript
+    var   numbers = [];
+    const start   = store.getTopScrollLine ();
+    const end     = store.getBottomScrollLine ();
+
+    for (var i = start; i <= end; i++) {
+      const line = store.lines[i];
+      numbers.push (<span key={line.id}>{1 + line.index}</span>);
+    }
+
+    return (
+      <div className="line-numbers">
+        {numbers}
+      </div>
+    );
+  #+END_SRC
+* TODO Gutter rendering like line rendering
+  As with the line  numbering rendering item above, change the gutter icon  rendering to the similar
+  to the line rendering: rendering only the gutter items for the visible lines.
+* TODO Conversion to ES6 and newer ReactJS version

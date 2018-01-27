@@ -2960,12 +2960,14 @@ EditorSyntaxEngine.prototype.highlightLine = function (line, start_state, tab_si
       regions.appendCodePoint ("whitespace", code);
       last_index++;
     } else {
+      const fallback_style = this.getStateStyle () || "plain";
+
       var result = this.match (line, last_index);
       if (result) {
-        regions.appendString (result.style, line.substring (last_index, last_index + result.length));
+        regions.appendString (result.style || fallback_style, line.substring (last_index, last_index + result.length));
         last_index += result.length;
       } else {
-        regions.appendCodePoint (this.getStateStyle () || "plain", code);
+        regions.appendCodePoint (fallback_style, code);
         last_index++;
       }
     }
