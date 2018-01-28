@@ -39,6 +39,8 @@ export class EditorRegion {
    * @example
    * new EditorRegion (1, 100, 2, 4).toString ();
    * // result: "[1:100,2:4]"
+   *
+   * @returns {string}
    */
   toString () {
     return "[" + this.startLine + ":" + this.startColumn + "," + this.endLine + ":" + this.endColumn + "]";

@@ -189,7 +189,7 @@ export class EditorMinimap {
    * @type {number[]}
    */
   static BRIGHTER_CHAR_DATA = EditorMinimap.CHAR_DATA.map (code => {
-    return Math.min (255, Math.max (0, Math.round (code * 1.5)));
+    return Math.min (255, Math.max (0, Math.round (code * 1.3)));
   });
 
   /**
