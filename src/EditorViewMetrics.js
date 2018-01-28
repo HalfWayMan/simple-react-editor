@@ -1,7 +1,15 @@
 import { EditorEvent } from './EditorEvent.js';
 import { EditorPosition } from './EditorPosition.js';
 
+/**
+ * Controls for the measurements of the editor view.
+ */
 export class EditorViewMetrics {
+  /**
+   * Construct a new `EditorViewMetrics`.
+   *
+   * @param {EditorStore} store The store to which this belongs
+   */
   constructor (store) {
     /**
      * The store to which this set of metrics belongs
@@ -60,15 +68,24 @@ export class EditorViewMetrics {
     this.Scroll = new EditorEvent ("EditorViewMetrics.Scroll");
   }
 
+  /**
+   * The index of the line at top of the editor view
+   * @type {number}
+   */
   get scrollTopLine () {
     return Math.min (this.store.lines.length - 1, Math.max (0, Math.floor (this.scrollTop / this.lineHeight)));
   }
 
+  /**
+   * The index of the line at the bottom of the editor view
+   * @type {number}
+   */
   get scrollBottomLine () {
     return this.scrollTopLine + (Math.ceil (this.viewHeight / this.lineHeight));
   }
 
   /**
+   * Set the scroll position for the view.
    *
    * @param {number} scroll_top The new scroll position
    * @param {boolean} clamp_to_line Whether to clamp the position to a line
@@ -103,6 +120,11 @@ export class EditorViewMetrics {
     }
   }
 
+  /**
+   * Set the height of the editor view.
+   *
+   * This function will adjust the `viewHeight` property and call {@link EditorViewMetrics#onViewHeightChanged}.
+   */
   setViewHeight (height) {
     if (this.viewHeight !== height) {
       this.viewHeight = height;
@@ -110,6 +132,11 @@ export class EditorViewMetrics {
     }
   }
 
+  /**
+   * Set the character width.
+   *
+   * This function will adjust the `charWidth` property and call {@link EditorViewMetrics#onCharWidthChange}.
+   */
   setCharWidth (width) {
     if (this.charWidth !== width) {
       this.charWidth = width;
@@ -117,6 +144,11 @@ export class EditorViewMetrics {
     }
   }
 
+  /**
+   * Set the height of a line in the editor.
+   *
+   * This function will adjust the `lineHeight` property and call {@link EditorViewMetrics#onLineHeightChanged}.
+   */
   setLineHeight (height) {
     if (this.lineHeight !== height) {
       this.lineHeight = height;
@@ -124,10 +156,23 @@ export class EditorViewMetrics {
     }
   }
 
+  /**
+   * Convert a client position (relative to the top-left of the view) to line and column indicies.
+   *
+   * @param {number} left The left position
+   * @param {number} top  The top position
+   * @returns {EditorPosition} The position within the editor
+   */
   clientToIndices (left, top) {
     return new EditorPosition (Math.floor (top / this.lineHeight), Math.round (left / this.charWidth));
   }
 
+  /**
+   * Convert a position in the editor to a client position in the view.
+   *
+   * @param {EditorPosition} position The position to convert to a client location
+   * @returns {object} An object with a `left` and `top` property relative to the view
+   */
   indicesToClient (position) {
     var result = { left: 0, top: 0 };
 
@@ -137,18 +182,37 @@ export class EditorViewMetrics {
     return result;
   }
 
+  /**
+   * Called when the `scrollTop` changes.
+   *
+   * @param {number} prev_top The previous scroll top
+   * @param {number} next_top The next scroll top
+   * @emits Scroll
+   */
   onScroll (prev_top, next_top) {
     this.Scroll.fire (prev_top, next_top);
   }
 
+  /**
+   * Called when the `lineHeight` changes.
+   * @emits LineHeightChanged
+   */
   onLineHeightChanged () {
     this.LineHeightChanged.fire ();
   }
 
+  /**
+   * Called when the `charWidth` changes.
+   * @emits CharWidthChanged
+   */
   onCharWidthChanged () {
     this.CharWidthChanged.fire ();
   }
 
+  /**
+   * Called when the `viewHeight` changes.
+   * @emits ViewHeightChanged
+   */
   onViewHeightChanged () {
     this.ViewHeightChanged.fire ();
   }

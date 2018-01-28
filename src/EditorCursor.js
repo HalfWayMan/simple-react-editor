@@ -5,7 +5,16 @@ import { EditorRegion } from './EditorRegion.js';
 import { EditorSelection } from './EditorSelection.js';
 import { EditorLine } from './EditorLine.js';
 
+/**
+ * A cursor in the editor.
+ */
 export class EditorCursor {
+  /**
+   * Construct a new cursor.
+   * @param {EditorCursorCollection} collection   The collection to which this cursor belongs
+   * @param {number}                 [id]         The unique ID for this cursor within the collection (default: `null`)
+   * @param {boolean}                [is_primary] Whether this cursor is the primary cursor (default: `false`)
+   */
   constructor (collection, id, is_primary) {
     /**
      * The ID of this cursor
@@ -98,7 +107,7 @@ export class EditorCursor {
    * This is obtained by querying the {@link EditorLineCollection} from the {@link EditorStore}
    * to which the {@link EditorCursorCollection} this cursor belongs to.
    *
-   * @returns {EditorLine} The line on which this cursor resides (or `null`)
+   * @type {EditorLine} The line on which this cursor resides (or `null`)
    */
   get line () {
     return this.collection.store.lines.get (this.position.line);
@@ -209,6 +218,17 @@ export class EditorCursor {
     } else this.removeSelection ();
   }
 
+  /**
+   * Move the cursor up a number of lines (if it can), see {@link EditorCursor#setLine}.
+   * If the new line invalidates the postion of the cursor it's column will be changed
+   * (see {@link EditorCursor#setColumn}).
+   *
+   * An option is given to extend the selection to include the new location
+   * (see {@link EditorCursor#extendSelection}).
+   *
+   * @param {number}  lines            The number of lines to move
+   * @param {boolean} extend_selection Whether to extend the selection to the new location
+   */
   moveUp (lines, extend_selection) {
     var prev_pos = this.position.clone ();
     this.setLine (this.position.line - lines);
@@ -223,6 +243,17 @@ export class EditorCursor {
     } else this.removeSelection ();
   }
 
+  /**
+   * Move the cursor down a number of lines (if it can), see {@link EditorCursor#setColumn}.
+   * If the new line invalidates the position of the cursor, it's column will be changed
+   * (see {@link EditorCursor#setColumn}).
+   *
+   * An option is given to extend the selection include the new location
+   * (see {@link EditorCursor#extendSelection}).
+   *
+   * @param {number}  lines            The number of lines to move
+   * @param {boolean} extend_selection Whether to extend the selection to the new location
+   */
   moveDown (lines, extend_selection) {
     var prev_pos = this.position.clone ();
     this.setLine (this.position.line + lines);
@@ -237,6 +268,12 @@ export class EditorCursor {
     } else this.removeSelection ();
   }
 
+  /**
+   * Move the cursor to the left a number of columns (if it can), see {@link EditorCursor#setColumn}.
+   *
+   * @param {number}  columns          Number of columns to move
+   * @param {boolean} extend_selection Whether to extend the selection
+   */
   moveLeft (columns, extend_selection) {
     if (!extend_selection && this.selection) {
       this.setPosition (this.selection.region.start);
@@ -258,6 +295,11 @@ export class EditorCursor {
     } else this.removeSelection ();
   }
 
+  /**
+   * Move the cursor to the start of the previous word.
+   *
+   * @param {boolean} [extend_selection] Whether to extend the selection
+   */
   moveWordLeft (extend_selection) {
     if (!extend_selection && this.selection) {
       this.setPosition (this.selection.region.end);
@@ -273,6 +315,12 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Move the cursor to the right a number of columns (if it can), see {@link EditorCursor#setColumn}.
+   *
+   * @param {number}  columns            Number of columns to move
+   * @param {boolean} [extend_selection] Whether to extend the selection
+   */
   moveRight (columns, extend_selection) {
     if (!extend_selection && this.selection) {
       this.setPosition (this.selection.region.end);
@@ -293,6 +341,11 @@ export class EditorCursor {
     } else this.removeSelection ();
   }
 
+  /**
+   * Move the cursor to the end of the next word.
+   *
+   * @param {boolean} [extend_selection] Whether to extend the selection
+   */
   moveWordRight (extend_selection) {
     if (!extend_selection && this.selection) {
       this.setPosition (this.selection.region.end);
@@ -308,6 +361,12 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Move to the start of the line.
+   *
+   * @param {boolean} [respect_indent]   Should we respect indentation first
+   * @param {boolean} [extend_selection] Whether to extend the selection
+   */
   moveStart (respect_indent, extend_selection) {
     const prev_pos = this.position.clone ();
 
@@ -327,6 +386,11 @@ export class EditorCursor {
     } else this.removeSelection ();
   }
 
+  /**
+   * Move to the end of the line.
+   *
+   * @param {boolean} extend_selection Whether to extend the selection
+   */
   moveEnd (extend_selection) {
     const prev_pos = this.position.clone ();
 
@@ -336,6 +400,12 @@ export class EditorCursor {
     } else this.removeSelection ();
   }
 
+  /**
+   * Insert text at the current cursor location.
+   *
+   * @param {string} text Text to insert
+   * @returns {EditorLine} The line on which we inserted the text
+   */
   insertText (text) {
     if (this.selection) {
       /* replace selection */
@@ -349,6 +419,9 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Insert a tab character at the cursor location.
+   */
   insertTab () {
     const line   = this.line;
     const prev   = line.previous;
@@ -362,6 +435,12 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Insert a new line at the cursor location.
+   *
+   * @param {boolean} [auto_indent] Whether to auto-indent the new line
+   * @returns {EditorLine} The line that was inserted
+   */
   insertLine (auto_indent) {
     if (this.selection) {
       /* replace selection */
@@ -403,11 +482,17 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Delete a number of characters backwards from the cursor location.
+   * @param {number} [count] The number of characetrs to delete (default: 1)
+   */
   deleteBackwards (count) {
     if (this.selection) {
       this.deleteSelected ();
     } else {
       const line = this.line;
+
+      count = count || 1;
 
       if (this.position.column === 0) {
         const prev = line.previous;
@@ -426,6 +511,10 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Delete a number of characters forwards of the cursor location.
+   * @param {number} [count] The number of characetrs to delete (default: 1)
+   */
   deleteForwards (count) {
     if (this.selection) {
       this.deleteSelected ();
@@ -446,15 +535,25 @@ export class EditorCursor {
     }
   }
 
-  extendSelection (prev_pos) {
+  /**
+   * Extend the current selection to include the current location of the
+   * cursor.
+   *
+   * @param {number} pivot The pivot position if we create a new selection
+   */
+  extendSelection (pivot) {
     if (!this.selection) {
-      this.selection = new EditorSelection (prev_pos);
+      this.selection = new EditorSelection (pivot);
     }
 
     this.selection.adjust (this.position);
     this.onSelectionChanged ();
   }
 
+  /**
+   * Select the entire line on which the cursor resides.
+   * @param {EditorLine} [line] An optional line to select
+   */
   selectLine (line) {
     if (!line) {
       line = this.line;
@@ -465,6 +564,9 @@ export class EditorCursor {
     this.setPosition ({ line: line.index + 1, column: 0 });
   }
 
+  /**
+   * Select the work at the current cursor location.
+   */
   selectWord () {
     const line       = this.line;
     const word_start = line.findPreviousWordStart (this.position.column, false);
@@ -477,6 +579,9 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Remove the selection
+   */
   removeSelection () {
     if (this.selection) {
       this.selection = null;
@@ -484,6 +589,9 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Delete the text selected by this cursor.
+   */
   deleteSelected () {
     if (this.selection) {
       const start = this.selection.region.start;
@@ -493,6 +601,14 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Copy the selected region to the clipboard.
+   *
+   * If no region has been selected then this method will copy the
+   * entire line.
+   *
+   * @param {boolean} [cut] Whether to remove selection after copying
+   */
   copySelected (cut) {
     if (this.selection) {
       const lines = this.collection.store.lines.acquireRegionContent (this.selection.region);
@@ -510,6 +626,9 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Paste the clipboard contents stored against this cursor at the current location.
+   */
   paste () {
     const content = this.clipboard.read ();
 
@@ -530,10 +649,18 @@ export class EditorCursor {
     }
   }
 
+  /**
+   * Test if the cursor is next to an encapsulator
+   * @returns {boolean} Whether the cursor is next to an encapsulator
+   */
   isNextToEncapsulator () {
     return this.line.isEncapsulatorAt (this.position.column) || this.line.isEncapsulatorAt (this.position.column - 1);
   }
 
+  /**
+   * Get the offset of cursor at the encapsualtor next to the cursor (or `null`)
+   * @returns {number} The offset of the encapsulator relative to the cursor position
+   */
   getEncapsulatorOffset () {
     const line = this.line;
 
@@ -544,6 +671,17 @@ export class EditorCursor {
     } else return null;
   }
 
+  /**
+   * Find the matching encapsulator position.
+   *
+   * That is, given that this cursor is currently next to an encapsulator character,
+   * search for either:
+   *
+   * 1. The next matching encapsulator (if this is an open encapsulator),
+   * 2. The previous matching encapsulator (if this is a close encapsulator).
+   *
+   * @returns {EditorPosition} The position of the matching encapsulator (or `null`)
+   */
   getMatchingEncapsulator () {
     const line = this.line;
 
@@ -563,21 +701,45 @@ export class EditorCursor {
     } else return null;
   }
 
+  /**
+   * Fire the {@link EditorCursor#LineChanged} event and call {@link EditorStore#onCursorChanged}
+   * with this cursor as an argument.
+   *
+   * @param {number} last_line The previous line index
+   * @param {number} next_line The new line index
+   */
   onLineChanged (last_line, next_line) {
     this.LineChanged.fire (last_line, next_line);
     this.collection.onCursorChanged (this);
   }
 
+  /**
+   * Fire the {@link EditorCursor#ColumnChanged} event and call {@link EditorStore#onCursorChanged}
+   * with this cursor as an argument.
+   *
+   * @param {number} last_col The previous column index
+   * @param {number} next_col The new column index
+   */
   onColumnChanged (last_col, next_col) {
     this.ColumnChanged.fire (last_col, next_col);
     this.collection.onCursorChanged (this);
   }
 
+  /**
+   * Fire the {@link EditorCursor#Changed} event and call {@link EditorStore#onCursorChanged}
+   * with this cursor as an argument.
+   *
+   * @param {EditorPosition} last_pos The last position of the cursor
+   * @param {EditorPosition} next_pos The new position of the editor
+   */
   onPositionChanged (last_pos, next_pos) {
     this.PositionChanged.fire (last_pos, next_pos);
     this.collection.onCursorChanged (this);
   }
 
+  /**
+   * Fire the {@link EditorCursor#event:SelectionChanged} event.
+   */
   onSelectionChanged () {
     this.SelectionChanged.fire ();
   }

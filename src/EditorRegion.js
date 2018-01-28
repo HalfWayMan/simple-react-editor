@@ -49,7 +49,7 @@ export class EditorRegion {
    *
    * An empty position is one which describes a zero region: both the start and end points are the same.
    *
-   * @returns {boolean} Whether this is an empty region.
+   * @type {boolean} Whether this is an empty region.
    */
   get empty () {
     return this.startLine === this.endLine && this.startColumn === this.endColumn;
@@ -93,7 +93,7 @@ export class EditorRegion {
 
   /**
    * Get the start row and column of this region as an `EditorPosition`.
-   * @returns {EditorPosition} The start position of the region
+   * @type {EditorPosition} The start position of the region
    */
   get start () {
     return new EditorPosition (this.startLine, this.startColumn);
@@ -110,7 +110,7 @@ export class EditorRegion {
 
   /**
    * Get the end row and column of this region as an `EditorPosition`.
-   * @returns {EditorPosition} The end position of the region.
+   * @type {EditorPosition} The end position of the region.
    */
   get end () {
     return new EditorPosition (this.endLine, this.endColumn);

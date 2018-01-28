@@ -1,28 +1,97 @@
 import { EditorEvent } from './EditorEvent.js';
 
+/**
+ * The minimap renderer.
+ */
 export class EditorMinimap {
   /**
-   * The minimap rendering.
+   * Construct an `EditorMinimap`.
    *
    * @param {EditorStore}       store  The store to which this minimap is attached
    * @param {HTMLCanvasElement} canvas The canvas element that we are to render to
    */
   constructor (store, canvas) {
-    this.store  = store;
+    /**
+     * The `EditorStore` to which this minimap is attached
+     * @type {EditorStore}
+     */
+    this.store = store;
+
+    /**
+     * The canvas to which we render
+     * @type {HTMLCanvasElement}
+     */
     this.canvas = canvas;
 
-    var crect   = canvas.getBoundingClientRect ();
-    this.width  = crect.width;
+    var crect = canvas.getBoundingClientRect ();
+
+    /**
+     * The width of the minimap
+     * @type {number}
+     */
+    this.width = crect.width;
+
+    /**
+     * The height of the minimap
+     * @type {number}
+     */
     this.height = crect.height;
 
-    this.context      = canvas.getContext ("2d");
-    this.buffer       = null;
-    this.lineStart    = 0;
-    this.lineEnd      = 0;
-    this.sliderHeight = 0;
-    this.sliderMaxTop = 0;
-    this.sliderTop    = 0;
+    /**
+     * The 2D rendering context
+     * @type {Context}
+     */
+    this.context = canvas.getContext ("2d");
 
+    /**
+     * The image buffer to whic hwe render
+     * @type {ImageData}
+     */
+    this.buffer = null;
+
+    /**
+     * The start line of the minimap
+     * @type {number}
+     */
+    this.lineStart = 0;
+
+    /**
+     * The end line of the minimap
+     * @type {number}
+     */
+    this.lineEnd = 0;
+
+    /**
+     * The height of the slider
+     * @type {number}
+     */
+    this.sliderHeight = 0;
+
+    /**
+     * The maximum top value of the slider.
+     *
+     * That is, the maximum value that we should set as the `top` value of the slider.
+     *
+     * @type {number}
+     */
+    this.sliderMaxTop = 0;
+
+    /**
+     * The current top value of the slider
+     * @type {number}
+     */
+    this.sliderTop = 0;
+
+    /**
+     * The fractional component of the slider
+     * @type {number}
+     */
+    this.sliderRatio = 0;
+
+    /**
+     * Event that is fired when the slider position changes.
+     * @type {EditorEVent}
+     */
     this.SliderChanged = new EditorEvent ("EditorMinimap.SliderChanged");
 
     this.store.lines.LinesChanged.bindTo (this, this.onLinesChanged);
@@ -30,12 +99,40 @@ export class EditorMinimap {
     this.store.viewMetrics.Scroll.bindTo (this, this.onScroll);
   }
 
-  static MIN_CHAR    = 32;
-  static MAX_CHAR    = 126;
-  static NUM_CHARS   = 1 + (EditorMinimap.MAX_CHAR - EditorMinimap.MIN_CHAR);
-  static CHAR_WIDTH  = 2;
+  /**
+   * The minimum character code
+   * @type {number}
+   */
+  static MIN_CHAR = 32;
+
+  /**
+   * The maximum character code
+   * @type {number}
+   */
+  static MAX_CHAR = 126;
+
+  /**
+   * The number of characters in the character data
+   * @type {number}
+   */
+  static NUM_CHARS = 1 + (EditorMinimap.MAX_CHAR - EditorMinimap.MIN_CHAR);
+
+  /**
+   * The width of a character in the minimap
+   * @type {number}
+   */
+  static CHAR_WIDTH = 2;
+
+  /**
+   * The height of a character in the minimap
+   * @type {number}
+   */
   static CHAR_HEIGHT = 4;
 
+  /**
+   * The character data
+   * @type {number[]}
+   */
   static CHAR_DATA = [
     /*  32   */ 0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00, /*  33 ! */ 0x1e, 0x1f, 0x27, 0x29,  0x17, 0x18, 0x03, 0x03,
     /*  34 " */ 0x35, 0x35, 0x18, 0x18,  0x00, 0x00, 0x00, 0x00, /*  35 # */ 0x25, 0x34, 0x71, 0x81,  0x83, 0x6f, 0x06, 0x03,
@@ -87,6 +184,10 @@ export class EditorMinimap {
     /* 126 ~ */ 0x00, 0x00, 0x35, 0x3c,  0x04, 0x15, 0x00, 0x00
   ];
 
+  /**
+   * A brighter version of the character data in `CHAR_DATA`
+   * @type {number[]}
+   */
   static BRIGHTER_CHAR_DATA = EditorMinimap.CHAR_DATA.map (code => {
     return Math.min (255, Math.max (0, Math.round (code * 1.5)));
   });
@@ -284,6 +385,14 @@ export class EditorMinimap {
     }
   }
 
+  /**
+   * Render the minimap.
+   *
+   * This function renders the minimap from the `lineStart` to the `lineEnd` properties that we
+   * computed in the {@link EditorMinimap#updateLayout} method. The method uses the `renderChar`
+   * function to render the line characters with the colors from the {@link EditorTheme} to the
+   * `ImageData`, after which it is rendered into the canvas with `putImageData`.
+   */
   render () {
     const store      = this.store;
     const theme      = store.theme;
@@ -315,17 +424,34 @@ export class EditorMinimap {
     this.context.putImageData (this.buffer, 0, 0);
   }
 
+  /**
+   * Listens to the {@link EditorLineCollection#LinesChanged} event and updates the layout
+   * information and then renders the minimap.
+   */
   onLinesChanged () {
     this.updateLayout ();
     this.render ();
   }
 
+  /**
+   * A method that is bound to the {@link EditorLineCollection#LineContentChanged} event.
+   *
+   * This method will re-render the mimimap when the index of the line is within the bounds
+   * of the minimap (i.e. between `lineStart` and `lineEnd`).
+   *
+   * @param {EditorLine} line The line that was changed
+   */
   onLineContentChanged (line) {
     if (line.index >= this.lineStart && line.index <= this.lineEnd) {
       this.render ();
     }
   }
 
+  /**
+   * A method that is bound to the {@link EditorViewMetrics#Scroll} event.
+   *
+   * This method will update the layout of the minimap and render it.
+   */
   onScroll () {
     this.updateLayout ();
     this.render ();

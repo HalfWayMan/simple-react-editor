@@ -17,12 +17,46 @@ export class EditorKeyMapping {
    * @param {function}               command The function to invoke when the key is matched
    */
   constructor (mode, key, shift, ctrl, alt, meta, command) {
-    this.mode    = mode;
-    this.key     = key;
-    this.shift   = typeof shift === "undefined" ? null : shift;
-    this.ctrl    = typeof ctrl  === "undefined" ? null : ctrl;
-    this.alt     = typeof alt   === "undefined" ? null : alt;
-    this.meta    = typeof meta  === "undefined" ? null : meta;
+    /**
+     * The mode for this mapping (`null`, `up`, `down` or `press`)
+     * @type {string}
+     */
+    this.mode = mode;
+
+    /**
+     * The key to match (or a regular expression, or a function)
+     * @type {string|RegExp|Function}
+     */
+    this.key = key;
+
+    /**
+     * Whether this mapping should constrain the shift key (pressed or not)
+     * @type {boolean?}
+     */
+    this.shift = typeof shift === "undefined" ? null : shift;
+
+    /**
+     * Whether this mapping should constrain the control key (pressed or not)
+     * @type {boolean?}
+     */
+    this.ctrl = typeof ctrl  === "undefined" ? null : ctrl;
+
+    /**
+     * Whether this mapping should constrain the alt key (pressed or not)
+     * @type {boolean?}
+     */
+    this.alt = typeof alt   === "undefined" ? null : alt;
+
+    /**
+     * Whether this mapping should constrain the meta key (pressed or not)
+     * @type {boolean?}
+     */
+    this.meta = typeof meta  === "undefined" ? null : meta;
+
+    /**
+     * The command to run if this mapping corresponds to an event
+     * @type {Function}
+     */
     this.command = command;
 
     if (mode !== null && typeof mode !== "string") {
@@ -53,6 +87,22 @@ export class EditorKeyMapping {
       throw new Error ("Expected 'command' argument to be a function; found " + typeof command);
     }
 
+    /**
+     * A function that matches a key event.
+     *
+     * Depending on the type of the `key` parameter, we set this property to a function that
+     * will either:
+     *
+     * 1. Match the `key` property of an event object to the `key` parameter, if the `key`
+     *    parameter is a `string`,
+     *
+     * 2. Test a regular expression in the `key` parameter against the `key` property of
+     *    the event, or
+     *
+     * 3. If the `key` parameter is a function then it is assked to `keyMatcher`.
+     *
+     * @type {Function}
+     */
     this.keyMatcher = null;
     if (typeof this.key === "string") {
       this.keyMatcher = (event) => {

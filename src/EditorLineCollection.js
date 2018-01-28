@@ -76,7 +76,7 @@ export class EditorLineCollection {
 
   /**
    * Get the number of lines in this collection
-   * @returns {number} The number of lines in the collection
+   * @type {number} The number of lines in the collection
    */
   get length () {
     return this.lines.length;

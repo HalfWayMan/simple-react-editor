@@ -159,7 +159,7 @@ export class EditorCursorCollection {
 
   /**
    * Get the cursor at the lowest line number.
-   * @returns {EditorCursor} The cursor on the lowest line number
+   * @type {EditorCursor} The cursor on the lowest line number
    */
   get lowest () {
     if (this.secondary.length === 0) {
@@ -174,7 +174,7 @@ export class EditorCursorCollection {
 
   /**
    * Get the cursor at the highest line number.
-   * @returns {EditorCursor} The cursor on the highest line number
+   * @type {EditorCursor} The cursor on the highest line number
    */
   get highest () {
     if (this.secondary.length === 0) {
@@ -252,16 +252,37 @@ export class EditorCursorCollection {
     this.Blink.fire (index);
   }
 
+  /**
+   * A cursor was added to the collection.
+   *
+   * Fires the {@link EditorCursorCollection#CursorAdded} event.
+   *
+   * @param {EditorCursor} cursor The cursor that was added
+   */
   onCursorAdded (cursor) {
     this.startBlink (true);
     this.CursorAdded.fire (cursor);
   }
 
+  /**
+   * A cursor that was removed from the collection.
+   *
+   * Fires the {@link EditorCursorCollection#CursorRemoved} event.
+   *
+   * @param {EditorCursor} cursor The cursor that was removed
+   */
   onCursorRemoved (cursor) {
     this.startBlink (true);
     this.CursorRemoved.fire (cursor);
   }
 
+  /**
+   * A cursor was changed.
+   *
+   * Fires the {@link EditorCursorCollection#CursorChanged} event.
+   *
+   * @param {EditorCursor} cursor The cursor that has changed
+   */
   onCursorChanged (cursor) {
     this.startBlink (true);
     this.CursorChanged.fire (cursor);

@@ -4,10 +4,28 @@ import { EditorPosition } from './EditorPosition.js';
 import { EditorLineCollection } from './EditorLineCollection.js';
 import * as Syntax from './EditorSyntax.js';
 
+/**
+ * A marker for a line.
+ */
 export class EditorLineMarker {
+  /**
+   * Construct a new line marker.
+   *
+   * @param {ReactComponent} component The component to render on this line
+   * @param {object}         [props]   The properties of the component (default: `{}`)
+   */
   constructor (component, props) {
+    /**
+     * The component that is to be rendered in the line marker
+     * @type {ReactComponent}
+     */
     this.component = component;
-    this.props     = props || {};
+
+    /**
+     * The properties for the component
+     * @type {object}
+     */
+    this.props = props || {};
   }
 }
 
@@ -62,7 +80,18 @@ export class EditorLine {
      */
     this.marker = null;
 
+    /**
+     * The state of the syntax engine at the start of this line's rendering
+     * @type {number}
+     * @default 0
+     */
     this.syntaxIn  = 0;
+
+    /**
+     * The state of the syntax engine at the end of this line's rendering
+     * @type {number}
+     * @default 0
+     */
     this.syntaxOut = 0;
 
     /**
@@ -201,7 +230,7 @@ export class EditorLine {
 
   /**
    * Get the length of the line.
-   * @returns {number} The length of the line in characters
+   * @type {number} The length of the line in characters
    */
   get length () {
     return this.content.length;
@@ -209,7 +238,7 @@ export class EditorLine {
 
   /**
    * Returns a region that encloses this line.
-   * @returns {EditorRegion} A region that encloses this line
+   * @type {EditorRegion} A region that encloses this line
    */
   get region () {
     return new EditorRegion (this.index, 0, this.index, this.content.length);
@@ -217,7 +246,7 @@ export class EditorLine {
 
   /**
    * Get the previous line to this one.
-   * @returns {EditorLine} The previous line
+   * @type {EditorLine} The previous line
    */
   get previous () {
     return this.collection.lines[this.index - 1] || null;
@@ -225,7 +254,7 @@ export class EditorLine {
 
   /**
    * Get the next line.
-   * @returns {EditorLine} The next line
+   * @type {EditorLine} The next line
    */
   get next () {
     return this.collection.lines[this.index + 1] || null;

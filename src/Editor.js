@@ -145,7 +145,7 @@ class RenderGutter extends React.Component {
     if (store.config.lineGutter) {
       const left     = RenderGutter.charLeft (store);
       const elements = store.lines.filter (line => line.marker !== null).map ((line, index) => {
-        return <div key={index}><RenderGutterMarker line={line} /></div>;
+        return <RenderGutterMarker key={index} line={line} />;
       });
 
       return (
@@ -195,7 +195,8 @@ class RenderIndentRegions extends React.Component {
     const tab_size  = store.config.tabSize;
     const regions   = store.lines.indentRegions;
     const last_line = metrics.scrollBottomLine;
-    const columns   = regions.map ((region, column) => {
+
+    const columns = regions.map ((region, column) => {
       const left   = column * tab_size * metrics.charWidth;
       const blocks = region.filter (block => block.start <= last_line).map ((block, index) => {
         return <div key={index}
@@ -716,6 +717,11 @@ RenderMinimap.propTypes = {
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
 
+/**
+ * Editor component.
+ *
+ * Pass in the {@link EditorStore} in the `store` property.
+ */
 export class Editor extends React.Component {
   onContainerKeyDown (event) {
     if (this.props.store.keymap.onKeyDown (event)) {
